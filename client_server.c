@@ -56,3 +56,11 @@ void dequeue(char* msg){
         pthread_mutex_unlock(&recv_msgs_mutex); pthread_mutex_unlock(&n_recv_msgs_mutex);
     }
 }
+
+int send_msg(char* msg, int socket_fd){
+    if((send(socket_fd, msg, strlen(msg), 0)) < 0){
+        return -1;
+    }else{
+        return 0;
+    }
+}

@@ -21,6 +21,7 @@
 
 // FUNC DEFNS
 int client_init();
+int send_msg(char* msg, int socket_fd);
 void* server_listen(void* arg);
 void enqueue(char recv_msg[BUFFER_SIZE]);
 
