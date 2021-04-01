@@ -1,0 +1,1 @@
+/usr/bin/cc -fPIC -shared -Wl,-soname,libCPS2008_Tetris_Client.so -o libCPS2008_Tetris_Client.so CMakeFiles/CPS2008_Tetris_Client.dir/src/client_server.c.o  -lpthread -lm 

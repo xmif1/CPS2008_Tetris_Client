@@ -1,0 +1,2 @@
+/usr/local/lib/libCPS2008_Tetris_Client.so
+/usr/local/include/client_server.h
