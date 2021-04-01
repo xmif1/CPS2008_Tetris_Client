@@ -12,7 +12,7 @@
 #define CPS2008_TETRIS_CLIENT_CLIENT_H
 
 // NETWORKING CONFIG
-#define PORT 6666
+#define PORT 8080
 #define SDOMAIN AF_INET // or AF_INET6, correspondingly using netinet/in.h
 #define IP_LOCALHOST "127.0.0.1"
 #define TYPE SOCK_STREAM
@@ -24,6 +24,7 @@ int client_init();
 int send_msg(char* msg, int socket_fd);
 void* server_listen(void* arg);
 void enqueue(char recv_msg[BUFFER_SIZE]);
+void dequeue(char* msg);
 
 // GLOBALS
 char recv_msgs[MSG_BUFFER_SIZE][BUFFER_SIZE]; pthread_mutex_t recv_msgs_mutex = PTHREAD_MUTEX_INITIALIZER;

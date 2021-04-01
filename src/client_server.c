@@ -7,7 +7,8 @@ int client_init(){
             .sin_port = htons(PORT)};
 
     // Create socket
-    if((socket_fd = socket(SDOMAIN, TYPE, 0)) < 0){
+    socket_fd = socket(SDOMAIN, TYPE, 0);
+    if(socket_fd < 0){
         return -1;
     }
 
@@ -25,12 +26,11 @@ int client_init(){
 }
 
 void* server_listen(void* arg){
-    int* socket_fd_ptr;
-    socket_fd_ptr = (int*) arg;
+    int socket_fd = *((int*) arg);
 
     char recv_msg[BUFFER_SIZE];
-    while(recv(*socket_fd_ptr, recv_msg, BUFFER_SIZE, 0) > 0){
-        enqueue(recv_msg);
+    while(recv(socket_fd, recv_msg, BUFFER_SIZE, 0) > 0){
+       enqueue(recv_msg);
     }
 }
 
@@ -48,17 +48,19 @@ void enqueue(char recv_msg[BUFFER_SIZE]){
 }
 
 void dequeue(char* msg){
-    msg = NULL;
     if(n_recv_msgs > 0){
         pthread_mutex_lock(&recv_msgs_mutex); pthread_mutex_lock(&n_recv_msgs_mutex);
+
+        msg = malloc(sizeof(recv_msgs[n_recv_msgs - 1])+1);
         strcpy(msg, recv_msgs[n_recv_msgs - 1]);
         n_recv_msgs--;
+
         pthread_mutex_unlock(&recv_msgs_mutex); pthread_mutex_unlock(&n_recv_msgs_mutex);
     }
 }
 
 int send_msg(char* msg, int socket_fd){
-    if((send(socket_fd, msg, strlen(msg), 0)) < 0){
+    if(send(socket_fd, msg, strlen(msg), 0) < 0){
         return -1;
     }else{
         return 0;
