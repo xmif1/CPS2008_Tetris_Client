@@ -16,18 +16,25 @@
 #define SDOMAIN AF_INET // or AF_INET6, correspondingly using netinet/in.h
 #define IP_LOCALHOST "127.0.0.1"
 #define TYPE SOCK_STREAM
-#define BUFFER_SIZE 1024
-#define MSG_BUFFER_SIZE 20
+#define MSG_SIZE 512
+#define MSG_BUFFER_SIZE 20s
+
+// STRUCTS
+typedef struct{
+    MsgType msg_type;
+    char msg[MSG_SIZE];
+}msg;
 
 // FUNC DEFNS
 int client_init();
-int send_msg(char* msg, int socket_fd);
-void enqueue_msgs(int socket_fd);
-char* dequeue_msgs();
+int send_msg(msg send_msg, int socket_fd);
+void enqueue_msg(int socket_fd);
+msg dequeue_msg();
 
 // GLOBALS
-char recv_msgs[MSG_BUFFER_SIZE][BUFFER_SIZE];
+msg recv_msgs[MSG_BUFFER_SIZE];
 pthread_mutex_t recv_msgs_mutex = PTHREAD_MUTEX_INITIALIZER;
 int n_recv_msgs = 0;
+enum MsgType {CHAT = 0, EMPTY = -1};
 
 #endif //CPS2008_TETRIS_CLIENT_CLIENT_H
