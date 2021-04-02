@@ -23,10 +23,11 @@
 int client_init();
 int send_msg(char* msg, int socket_fd);
 void enqueue_msgs(int socket_fd);
-void dequeue_msgs(char* msg);
+char* dequeue_msgs();
 
 // GLOBALS
-char recv_msgs[MSG_BUFFER_SIZE][BUFFER_SIZE]; pthread_mutex_t recv_msgs_mutex = PTHREAD_MUTEX_INITIALIZER;
-int n_recv_msgs = 0; pthread_mutex_t n_recv_msgs_mutex = PTHREAD_MUTEX_INITIALIZER;
+char recv_msgs[MSG_BUFFER_SIZE][BUFFER_SIZE];
+pthread_mutex_t recv_msgs_mutex = PTHREAD_MUTEX_INITIALIZER;
+int n_recv_msgs = 0;
 
 #endif //CPS2008_TETRIS_CLIENT_CLIENT_H

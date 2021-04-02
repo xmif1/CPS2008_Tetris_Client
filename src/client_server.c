@@ -22,13 +22,13 @@ int client_init(){
 
 void enqueue_msgs(int socket_fd){
     char recv_msg[BUFFER_SIZE];
-    while(recv(socket_fd, recv_msg, BUFFER_SIZE, 0) > 0){
-        while(1){
+    if(recv(socket_fd, recv_msg, BUFFER_SIZE, 0) > 0){
+      while(1){
             if(n_recv_msgs < (MSG_BUFFER_SIZE - 1)){ // if msg buffer is full, further buffering is handled by TCPs flow control
-                pthread_mutex_lock(&recv_msgs_mutex); pthread_mutex_lock(&n_recv_msgs_mutex);
+                pthread_mutex_lock(&recv_msgs_mutex);
                 strcpy(recv_msgs[n_recv_msgs], recv_msg);
                 n_recv_msgs++;
-                pthread_mutex_unlock(&recv_msgs_mutex); pthread_mutex_unlock(&n_recv_msgs_mutex);
+                pthread_mutex_unlock(&recv_msgs_mutex);
 
                 break;
             }
@@ -36,15 +36,20 @@ void enqueue_msgs(int socket_fd){
     }
 }
 
-void dequeue_msgs(char* msg){
+char* dequeue_msgs(){
     if(n_recv_msgs > 0){
-        pthread_mutex_lock(&recv_msgs_mutex); pthread_mutex_lock(&n_recv_msgs_mutex);
+        pthread_mutex_lock(&recv_msgs_mutex);
 
-        msg = malloc(sizeof(recv_msgs[n_recv_msgs - 1])+1);
+        char* msg = malloc(strlen(recv_msgs[n_recv_msgs - 1])+1);
         strcpy(msg, recv_msgs[n_recv_msgs - 1]);
+	msg[strlen(recv_msgs[n_recv_msgs - 1])] = '\0';
         n_recv_msgs--;
 
-        pthread_mutex_unlock(&recv_msgs_mutex); pthread_mutex_unlock(&n_recv_msgs_mutex);
+        pthread_mutex_unlock(&recv_msgs_mutex);
+
+	return msg;
+    }else{
+        return NULL;
     }
 }
 
