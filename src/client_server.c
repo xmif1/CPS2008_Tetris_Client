@@ -23,26 +23,36 @@ int client_init(){
 void enqueue_msg(int socket_fd){
     msg recv_msg;
     if(recv(socket_fd, (void*) &recv_msg, sizeof(msg), 0) > 0){
-      while(1){
-            if(n_recv_msgs < (MSG_BUFFER_SIZE - 1)){ // if msg buffer is full, further buffering is handled by TCPs flow control
-                pthread_mutex_lock(&recv_msgs_mutex);
-                recv_msgs[n_recv_msgs] = recv_msg;
-                n_recv_msgs++;
-                pthread_mutex_unlock(&recv_msgs_mutex);
+        if(recv_msg.msg_type == CHAT) {
+            while (1) {
+                // if msg buffer is full, further buffering is handled by TCPs flow control
+                if (n_chat_msgs < (MSG_BUFFER_SIZE - 1)) {
+                    pthread_mutex_lock(&threadMutex);
+                    recv_chat_msgs[n_chat_msgs] = recv_msg;
+                    n_chat_msgs++;
+                    pthread_mutex_unlock(&threadMutex);
 
-                break;
+                    break;
+                }
             }
+        }
+        else{ // will later handle different types of msgs
+            continue;
         }
     }
 }
 
-msg dequeue_msg(){
-    msg recv_msg = {.msg = "", .msg_type = EMPTY};
-    if(n_recv_msgs > 0){
-        pthread_mutex_lock(&recv_msgs_mutex);
-        recv_msg = recv_msgs[n_recv_msgs - 1];
-        n_recv_msgs--;
-        pthread_mutex_unlock(&recv_msgs_mutex);
+msg dequeue_chat_msg(){
+    msg recv_msg;
+    while(1){
+        if(n_chat_msgs > 0){
+            pthread_mutex_lock(&threadMutex);
+            recv_msg = recv_chat_msgs[n_chat_msgs - 1];
+            n_chat_msgs--;
+            pthread_mutex_unlock(&threadMutex);
+
+            break;
+        }
     }
 
     return recv_msg;

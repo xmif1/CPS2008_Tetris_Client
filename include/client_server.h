@@ -29,12 +29,12 @@ typedef struct{
 int client_init();
 int send_msg(msg send_msg, int socket_fd);
 void enqueue_msg(int socket_fd);
-msg dequeue_msg();
+msg dequeue_chat_msg();
 
 // GLOBALS
-msg recv_msgs[MSG_BUFFER_SIZE];
-pthread_mutex_t recv_msgs_mutex = PTHREAD_MUTEX_INITIALIZER;
-int n_recv_msgs = 0;
+msg recv_chat_msgs[MSG_BUFFER_SIZE];
+pthread_mutex_t threadMutex = PTHREAD_MUTEX_INITIALIZER;
+int n_chat_msgs = 0;
 enum MsgType {CHAT = 0, EMPTY = -1};
 
 #endif //CPS2008_TETRIS_CLIENT_CLIENT_H
