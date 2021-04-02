@@ -17,39 +17,26 @@ int client_init(){
         return -1;
     }
 
-    pthread_t server_thread;
-    if(pthread_create(&server_thread, NULL, server_listen, (void*) &socket_fd) != 0){
-        return -1;
-    }
-
     return socket_fd;
 }
 
-void* server_listen(void* arg){
-    int socket_fd = *((int*) arg);
-
-    printf("%d\n", socket_fd);
-
+void enqueue_msgs(int socket_fd){
     char recv_msg[BUFFER_SIZE];
     while(recv(socket_fd, recv_msg, BUFFER_SIZE, 0) > 0){
-       enqueue(recv_msg);
-    }
-}
+        while(1){
+            if(n_recv_msgs < (MSG_BUFFER_SIZE - 1)){ // if msg buffer is full, further buffering is handled by TCPs flow control
+                pthread_mutex_lock(&recv_msgs_mutex); pthread_mutex_lock(&n_recv_msgs_mutex);
+                strcpy(recv_msgs[n_recv_msgs], recv_msg);
+                n_recv_msgs++;
+                pthread_mutex_unlock(&recv_msgs_mutex); pthread_mutex_unlock(&n_recv_msgs_mutex);
 
-void enqueue(char recv_msg[BUFFER_SIZE]){
-    while(1){
-        if(n_recv_msgs < (MSG_BUFFER_SIZE - 1)){ // if msg buffer is full, further buffering is handled by TCPs flow control
-            pthread_mutex_lock(&recv_msgs_mutex); pthread_mutex_lock(&n_recv_msgs_mutex);
-            strcpy(recv_msgs[n_recv_msgs], recv_msg);
-            n_recv_msgs++;
-            pthread_mutex_unlock(&recv_msgs_mutex); pthread_mutex_unlock(&n_recv_msgs_mutex);
-
-            break;
+                break;
+            }
         }
     }
 }
 
-void dequeue(char* msg){
+void dequeue_msgs(char* msg){
     if(n_recv_msgs > 0){
         pthread_mutex_lock(&recv_msgs_mutex); pthread_mutex_lock(&n_recv_msgs_mutex);
 

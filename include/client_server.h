@@ -22,9 +22,8 @@
 // FUNC DEFNS
 int client_init();
 int send_msg(char* msg, int socket_fd);
-void* server_listen(void* arg);
-void enqueue(char recv_msg[BUFFER_SIZE]);
-void dequeue(char* msg);
+void enqueue_msgs(int socket_fd);
+void dequeue_msgs(char* msg);
 
 // GLOBALS
 char recv_msgs[MSG_BUFFER_SIZE][BUFFER_SIZE]; pthread_mutex_t recv_msgs_mutex = PTHREAD_MUTEX_INITIALIZER;
