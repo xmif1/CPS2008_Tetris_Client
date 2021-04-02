@@ -17,11 +17,11 @@
 #define IP_LOCALHOST "127.0.0.1"
 #define TYPE SOCK_STREAM
 #define MSG_SIZE 512
-#define MSG_BUFFER_SIZE 20s
+#define MSG_BUFFER_SIZE 20
 
 // STRUCTS
 typedef struct{
-    MsgType msg_type;
+    int msg_type;
     char msg[MSG_SIZE];
 }msg;
 
