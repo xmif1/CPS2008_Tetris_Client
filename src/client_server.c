@@ -28,6 +28,8 @@ int client_init(){
 void* server_listen(void* arg){
     int socket_fd = *((int*) arg);
 
+    printf("%d\n", socket_fd);
+
     char recv_msg[BUFFER_SIZE];
     while(recv(socket_fd, recv_msg, BUFFER_SIZE, 0) > 0){
        enqueue(recv_msg);
