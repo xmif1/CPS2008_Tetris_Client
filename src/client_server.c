@@ -25,9 +25,11 @@ int client_init(){
     return socket_fd;
 }
 
-void enqueue_msg(int socket_fd){
+int enqueue_msg(int socket_fd){
     msg recv_msg;
-    if(recv(socket_fd, (void*) &recv_msg, sizeof(msg), 0) > 0){
+    int ret;
+
+    if((ret = recv(socket_fd, (void*) &recv_msg, sizeof(msg), 0)) > 0){
         if(recv_msg.msg_type == CHAT){
             while(1){
                 // if msg buffer is full, further buffering is handled by TCPs flow control
@@ -41,8 +43,10 @@ void enqueue_msg(int socket_fd){
                 }
             }
         }
-        // will later handle different types of msgs
+        // will later handle different types of msgs 
     }
+
+    return ret;
 }
 
 msg dequeue_chat_msg(){
@@ -62,11 +66,7 @@ msg dequeue_chat_msg(){
 }
 
 int send_msg(msg send_msg, int socket_fd){
-    if(send(socket_fd, (void*) &send_msg, sizeof(msg), 0) < 0){
-        return -1;
-    }else{
-        return 0;
-    }
+    return send(socket_fd, (void*) &send_msg, sizeof(msg), 0);
 }
 
 /* ----------- ERROR HANDLING ----------- */
