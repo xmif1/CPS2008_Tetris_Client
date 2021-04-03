@@ -30,6 +30,11 @@ int client_init();
 int send_msg(msg send_msg, int socket_fd);
 void enqueue_msg(int socket_fd);
 msg dequeue_chat_msg();
+void mrerror(char* err_msg);
+void smrerror(char* err_msg);
+void red();
+void yellow();
+void reset();
 
 // GLOBALS
 msg recv_chat_msgs[MSG_BUFFER_SIZE];
