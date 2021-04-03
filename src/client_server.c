@@ -12,11 +12,6 @@ int client_init(){
         return -1;
     }
 
-    // Set timeout of recv
-    struct timeval timeout;
-    timeout.tv_sec = 5; // timeout after 5 seconds
-    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*) &timeout, sizeof(timeout));
-
     // Then connect it...
     if(connect(socket_fd, (struct sockaddr*) &serveraddrIn, sizeof(serveraddrIn)) < 0){
         return -1;
@@ -27,9 +22,21 @@ int client_init(){
 
 int enqueue_msg(int socket_fd){
     msg recv_msg;
-    int ret;
+    fd_set set; FD_ZERO(&set); FD_SET(socket_fd, &set);
 
-    if((ret = recv(socket_fd, (void*) &recv_msg, sizeof(msg), 0)) > 0){
+    struct timeval timeout;
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+
+    int ret = select(socket_fd + 1, &set, NULL, NULL, &timeout);
+
+    if(ret < 0){
+        return ret;
+    }
+    else if(ret == 0){
+        return 1;
+    }
+    else if((ret = recv(socket_fd, (void*) &recv_msg, sizeof(msg), 0)) > 0){
         if(recv_msg.msg_type == CHAT){
             while(1){
                 // if msg buffer is full, further buffering is handled by TCPs flow control
