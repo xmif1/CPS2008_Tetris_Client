@@ -40,6 +40,7 @@ void enqueue_msg(int socket_fd){
                     break;
                 }
             }
+        }
         // will later handle different types of msgs
     }
 }
