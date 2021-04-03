@@ -36,9 +36,7 @@ void enqueue_msg(int socket_fd){
                 }
             }
         }
-        else{ // will later handle different types of msgs
-            continue;
-        }
+        // will later handle different types of msgs
     }
 }
 
