@@ -1,7 +1,0 @@
-/home/xandru/Documents/CPS2008_Tetris_Client/CMakeFiles/install/strip.dir
-/home/xandru/Documents/CPS2008_Tetris_Client/CMakeFiles/install/local.dir
-/home/xandru/Documents/CPS2008_Tetris_Client/CMakeFiles/rebuild_cache.dir
-/home/xandru/Documents/CPS2008_Tetris_Client/CMakeFiles/edit_cache.dir
-/home/xandru/Documents/CPS2008_Tetris_Client/CMakeFiles/install.dir
-/home/xandru/Documents/CPS2008_Tetris_Client/CMakeFiles/list_install_components.dir
-/home/xandru/Documents/CPS2008_Tetris_Client/CMakeFiles/CPS2008_Tetris_Client.dir
