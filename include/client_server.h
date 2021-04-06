@@ -16,7 +16,7 @@
 #define SDOMAIN AF_INET // or AF_INET6, correspondingly using netinet/in.h
 #define IP_LOCALHOST "127.0.0.1"
 #define TYPE SOCK_STREAM
-#define MSG_SIZE 512
+#define MSG_SIZE 1024
 #define MSG_BUFFER_SIZE 20
 
 // STRUCTS
@@ -40,6 +40,6 @@ void reset();
 msg recv_chat_msgs[MSG_BUFFER_SIZE];
 pthread_mutex_t threadMutex = PTHREAD_MUTEX_INITIALIZER;
 int n_chat_msgs = 0;
-enum MsgType {CHAT = 0, EMPTY = -1};
+enum MsgType {CHAT = 0, SCORE_UPDATE = 1, FINISHED_GAME = 2};
 
 #endif //CPS2008_TETRIS_CLIENT_CLIENT_H
