@@ -14,7 +14,7 @@
 // NETWORKING CONFIG
 #define PORT 8080
 #define SDOMAIN AF_INET // or AF_INET6, correspondingly using netinet/in.h
-#define IP_LOCALHOST "127.0.0.1"
+#define IP_LOCALHOST "127.0.0.1"  // "192.168.68.100"   // "127.0.0.1"
 #define TYPE SOCK_STREAM
 #define MSG_SIZE 1024
 #define MSG_BUFFER_SIZE 20
