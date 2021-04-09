@@ -31,6 +31,7 @@ int client_init();
 int send_msg(msg send_msg, int socket_fd);
 int enqueue_msg(int socket_fd);
 msg dequeue_chat_msg();
+void handle_chat_msg(msg recv_msg);
 void mrerror(char* err_msg);
 void smrerror(char* err_msg);
 void red();

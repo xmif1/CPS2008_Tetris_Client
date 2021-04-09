@@ -66,18 +66,8 @@ int enqueue_msg(int socket_fd){
             }
 
             if(!recv_msg_failed){
-                if(recv_msg.msg_type == CHAT){
-                    while(1){
-                        // if msg buffer is full, further buffering is handled by TCPs flow control
-                        if(n_chat_msgs < (MSG_BUFFER_SIZE - 1)){
-                            pthread_mutex_lock(&threadMutex);
-                            recv_chat_msgs[n_chat_msgs] = recv_msg;
-                            n_chat_msgs++;
-                            pthread_mutex_unlock(&threadMutex);
-
-                            break;
-                        }
-                    }
+                switch(recv_msg.msg_type){
+                    case CHAT: handle_chat_msg(recv_msg); break;
                 }
                 // will later handle different types of msgs
             }
@@ -139,6 +129,22 @@ int send_msg(msg send_msg, int socket_fd){
     free(str_to_send);
 
     return sent_bytes;
+}
+
+/* ----------- UTIL FUNCTIONS ----------- */
+
+void handle_chat_msg(msg recv_msg){
+    while(1){
+        // if msg buffer is full, further buffering is handled by TCPs flow control
+        if(n_chat_msgs < (MSG_BUFFER_SIZE - 1)){
+            pthread_mutex_lock(&threadMutex);
+            recv_chat_msgs[n_chat_msgs] = recv_msg;
+            n_chat_msgs++;
+            pthread_mutex_unlock(&threadMutex);
+
+            break;
+        }
+    }
 }
 
 /* ----------- ERROR HANDLING ----------- */
