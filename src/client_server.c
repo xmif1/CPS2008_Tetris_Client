@@ -57,6 +57,9 @@ int enqueue_msg(int socket_fd){
             recv_msg.msg_type = strtol(token, NULL, 10);
 
             recv_msg.msg = malloc(recv_str_len);
+            if(recv_msg.msg == NULL){
+                mrerror("Error while allocating memory");
+            }
 
             for(tbr = 0; tbr < recv_str_len; tbr += ret){
                 if((ret = recv(socket_fd, (void*) recv_msg.msg + tbr, recv_str_len - tbr, 0)) < 0){
