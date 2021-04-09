@@ -16,13 +16,14 @@
 #define SDOMAIN AF_INET // or AF_INET6, correspondingly using netinet/in.h
 #define IP_LOCALHOST "127.0.0.1"  // "192.168.68.100"   // "127.0.0.1"
 #define TYPE SOCK_STREAM
-#define MSG_SIZE 1024
+#define MSG_LEN_DIGITS 4
+#define HEADER_SIZE (MSG_LEN_DIGITS + 5) // '<msg_len>::<msg_type>::' where msg_len is of size MSG_LEN_DIGITS chars and msg_type is 1 char
 #define MSG_BUFFER_SIZE 20
 
 // STRUCTS
 typedef struct{
     int msg_type;
-    char msg[MSG_SIZE];
+    char* msg;
 }msg;
 
 // FUNC DEFNS
