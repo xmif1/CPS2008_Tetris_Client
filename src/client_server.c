@@ -23,7 +23,7 @@ int client_init(){
 int enqueue_msg(int socket_fd){
     msg recv_msg;
     int tbr, recv_str_len;
-    char header[HEADER_SIZE];
+    char header[HEADER_SIZE]; header[HEADER_SIZE - 1] = '\0';
 
     fd_set set; FD_ZERO(&set); FD_SET(socket_fd, &set);
 
@@ -39,9 +39,9 @@ int enqueue_msg(int socket_fd){
     else if(ret == 0){
         return 1;
     }
-    else if((ret = recv(socket_fd, (void*) &header, HEADER_SIZE, 0)) > 0){
+    else if((ret = recv(socket_fd, (void*) &header, HEADER_SIZE - 1, 0)) > 0){
         int recv_header_failed = 0;
-        for(tbr = ret; tbr < HEADER_SIZE; tbr += ret){
+        for(tbr = ret; tbr < HEADER_SIZE - 1; tbr += ret){
             if((ret = recv(socket_fd, (void*) (&header + tbr), recv_str_len - tbr, 0)) < 0){
                 recv_header_failed = 1;
                 break;
@@ -98,7 +98,7 @@ msg dequeue_chat_msg(){
 
 int send_msg(msg send_msg, int socket_fd){
     int msg_len = strlen(send_msg.msg) + 1;
-    int str_to_send_len = HEADER_SIZE + msg_len;
+    int str_to_send_len = HEADER_SIZE + msg_len - 1;
     char header[HEADER_SIZE];
     char* str_to_send = malloc(str_to_send_len);
 

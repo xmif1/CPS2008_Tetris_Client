@@ -14,10 +14,10 @@
 // NETWORKING CONFIG
 #define PORT 8080
 #define SDOMAIN AF_INET // or AF_INET6, correspondingly using netinet/in.h
-#define IP_LOCALHOST "127.0.0.1"  // "192.168.68.100"   // "127.0.0.1"
+#define IP_LOCALHOST "10.68.116.96"   // "127.0.0.1"
 #define TYPE SOCK_STREAM
 #define MSG_LEN_DIGITS 4
-#define HEADER_SIZE (MSG_LEN_DIGITS + 5) // '<msg_len>::<msg_type>::' where msg_len is of size MSG_LEN_DIGITS chars and msg_type is 1 char
+#define HEADER_SIZE (MSG_LEN_DIGITS + 6) // '<msg_len>::<msg_type>::\0' where msg_len is of size MSG_LEN_DIGITS chars and msg_type is 1 char
 #define MSG_BUFFER_SIZE 20
 
 // STRUCTS
