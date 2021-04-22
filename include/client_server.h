@@ -72,7 +72,7 @@ pthread_mutex_t clientMutexes[N_SESSION_PLAYERS];
 int server_fd;
 game_session gameSession;
 
-enum MsgType {CHAT = 0, SCORE_UPDATE = 1, NEW_GAME = 2, FINISHED_GAME = 3, P2P_READY = 4, CLIENTS_CONNECTED = 5};
+enum MsgType {CHAT = 0, SCORE_UPDATE = 1, NEW_GAME = 2, FINISHED_GAME = 3, P2P_READY = 4, CLIENTS_CONNECTED = 5, START_GAME = 6};
 enum GameType {RISING_TIDE = 0, FAST_TRACK = 1, BOOMER = 2};
 enum State {WAITING = 0, CONNECTED = 1, FINISHED = 2, DISCONNECTED = 3};
 
