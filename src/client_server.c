@@ -144,12 +144,12 @@ int send_msg(msg sendMsg, int socket_fd){
 
 /* ----------- UTIL FUNCTIONS ----------- */
 
-void handle_chat_msg(msg recv_msg){
+void handle_chat_msg(msg recvMsg){
     while(1){
         // if msg buffer is full, further buffering is handled by TCPs flow control
         if(n_chat_msgs < (MSG_BUFFER_SIZE - 1)){
             pthread_mutex_lock(&threadMutex);
-            recv_chat_msgs[n_chat_msgs] = recv_msg;
+            recv_chat_msgs[n_chat_msgs] = recvMsg;
             n_chat_msgs++;
             pthread_mutex_unlock(&threadMutex);
 
@@ -158,8 +158,8 @@ void handle_chat_msg(msg recv_msg){
     }
 }
 
-void handle_new_game_msg(msg recv_msg){
-    char* token = strtok(recv_msg.msg, "::");
+void handle_new_game_msg(msg recvMsg){
+    char* token = strtok(recvMsg.msg, "::");
     gameSession.game_type = strtol(token, NULL, 10);
 
     token = strtok(NULL, "::");
