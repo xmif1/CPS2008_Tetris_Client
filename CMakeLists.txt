@@ -3,7 +3,7 @@ project(CPS2008_Tetris_Client C)
 set(CMAKE_C_STANDARD 99)
 
 set(DEFAULT_BUILD_TYPE "Release")
-set(SOURCE_FILES src/client_server.c src/client_peer.cpp include/client_peer.h)
+set(SOURCE_FILES src/client_server.c)
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
 
 target_link_libraries(${PROJECT_NAME} pthread m)
