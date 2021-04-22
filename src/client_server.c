@@ -174,7 +174,13 @@ void handle_new_game_msg(msg recvMsg){
         if(port != (PORT + gameSession.n_players + 1)){
             gameSession.players[gameSession.n_players] = malloc(sizeof(ingame_client));
             gameSession.players[gameSession.n_players]->state = WAITING;
-            gameSession.players[gameSession.n_players]->port = PORT + gameSession.n_players + 1;
+
+            if(port < (PORT + gameSession.n_players + 1)){
+                gameSession.players[gameSession.n_players]->port = PORT + gameSession.n_players + 1;
+            }else{
+                gameSession.players[gameSession.n_players]->port = PORT + gameSession.n_players + 2;
+            }
+
             strcpy(gameSession.players[gameSession.n_players]->ip, token);
 
             gameSession.n_players++;
@@ -214,6 +220,7 @@ void handle_new_game_msg(msg recvMsg){
 // notice that data accessed by this function running in its own thread is independent from the data accessed by the
 // join_peer_connections function running in its own thread; in this manner, these functions are thread safe
 void* accept_peer_connections(void* arg){
+    printf("%d\n", gameSession.n_players); // debug
     struct sockaddr_in clientaddrIn;
     socklen_t sizeof_clientaddrIn = sizeof(struct sockaddr_in);
     fd_set recv_fds;
