@@ -51,7 +51,8 @@ typedef struct{
 int client_init();
 int client_connect();
 int send_msg(msg sendMsg, int socket_fd);
-int enqueue_server_msg(int socket_fd, msg* recv_server_msg);
+msg enqueue_server_msg(int socket_fd);
+msg recv_msg(int socket_fd);
 msg dequeue_chat_msg();
 void* accept_peer_connections(void* arg);
 void* service_peer_connections(void* arg);
@@ -72,7 +73,8 @@ pthread_mutex_t clientMutexes[N_SESSION_PLAYERS];
 int server_fd;
 game_session gameSession;
 
-enum MsgType {CHAT = 0, SCORE_UPDATE = 1, NEW_GAME = 2, FINISHED_GAME = 3, P2P_READY = 4, CLIENTS_CONNECTED = 5, START_GAME = 6};
+enum MsgType {INVALID = -2, EMPTY = -1, CHAT = 0, SCORE_UPDATE = 1, NEW_GAME = 2, FINISHED_GAME = 3, P2P_READY = 4,
+              CLIENTS_CONNECTED = 5, START_GAME = 6};
 enum GameType {RISING_TIDE = 0, FAST_TRACK = 1, BOOMER = 2};
 enum State {WAITING = 0, CONNECTED = 1, FINISHED = 2, DISCONNECTED = 3};
 

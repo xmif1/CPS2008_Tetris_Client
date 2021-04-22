@@ -26,15 +26,17 @@ int client_connect(char ip[INET_ADDRSTRLEN], int port){
     return socket_fd;
 }
 
-msg* recv_msg(int socket_fd){
-    msg* recv_msg = malloc(sizeof(msg));
+msg recv_msg(int socket_fd){
+    msg recv_msg;
+    recv_msg.msg_type = INVALID;
+
     int ret, tbr, recv_str_len; // tbr = total bytes read
     char header[HEADER_SIZE]; header[HEADER_SIZE - 1] = '\0';
 
     if((ret = recv(socket_fd, (void*) &header, HEADER_SIZE - 1, 0)) > 0){
         for(tbr = ret; tbr < HEADER_SIZE - 1; tbr += ret){
             if((ret = recv(socket_fd, (void*) (&header + tbr), HEADER_SIZE - tbr, 0)) < 0){
-                return NULL;
+                recv_msg.msg_type = INVALID;
             }
         }
 
@@ -42,25 +44,21 @@ msg* recv_msg(int socket_fd){
         recv_str_len = strtol(token, NULL, 10);
 
         token = strtok(NULL, "::");
-        recv_msg->msg_type = strtol(token, NULL, 10);
+        recv_msg.msg_type = strtol(token, NULL, 10);
 
-        recv_msg->msg = malloc(recv_str_len);
+        recv_msg.msg = malloc(recv_str_len);
 
         for(tbr = 0; tbr < recv_str_len; tbr += ret){
-            if((ret = recv(socket_fd, (void*) recv_msg->msg + tbr, recv_str_len - tbr, 0)) < 0){
-                return NULL;
+            if((ret = recv(socket_fd, (void*) recv_msg.msg + tbr, recv_str_len - tbr, 0)) < 0){
+                recv_msg.msg_type = INVALID;
             }
         }
-
-        return recv_msg;
     }
 
-    return NULL;
+    return recv_msg;
 }
 
-int enqueue_server_msg(int socket_fd, msg* recv_server_msg){
-    recv_server_msg = NULL;
-
+msg enqueue_server_msg(int socket_fd){
     int tbr, recv_str_len;
     char header[HEADER_SIZE]; header[HEADER_SIZE - 1] = '\0';
 
@@ -73,15 +71,15 @@ int enqueue_server_msg(int socket_fd, msg* recv_server_msg){
     int ret = select(socket_fd + 1, &set, NULL, NULL, &timeout);
 
     if(ret < 0){
-        return ret;
+        msg err_msg; err_msg.msg_type = INVALID;
+        return err_msg;
     }
     else if(ret == 0){
-        return 1;
+        msg empty_msg; empty_msg.msg_type = EMPTY;
+        return empty_msg;
     }else{
-        recv_server_msg = recv_msg(socket_fd);
+        return recv_msg(socket_fd);
     }
-
-    return ret;
 }
 
 msg dequeue_chat_msg(){
@@ -332,11 +330,9 @@ void* service_peer_connections(void* arg){
         }else{
             for(int i = 0; i < gameSession.n_players; i++){
                 if(FD_ISSET(gameSession.players[i]->server_fd, &recv_fds)){
-                    msg* recv_server_msg;
+                    msg recv_server_msg = recv_msg(gameSession.players[i]->server_fd);
 
-                    if(((recv_server_msg = recv_msg(gameSession.players[i]->server_fd)) != NULL)
-                            && (recv_server_msg->msg_type == CLIENTS_CONNECTED)){
-
+                    if(recv_server_msg.msg_type == CLIENTS_CONNECTED){
                         n_ack_recv++;
                     }else{
                         pthread_mutex_lock(clientMutexes + i);
