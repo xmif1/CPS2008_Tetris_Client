@@ -51,7 +51,7 @@ typedef struct{
 int client_init();
 int client_connect();
 int send_msg(msg sendMsg, int socket_fd);
-int enqueue_server_msg(int socket_fd);
+int enqueue_server_msg(int socket_fd, msg* recv_server_msg);
 msg dequeue_chat_msg();
 void* accept_peer_connections(void* arg);
 void* service_peer_connections(void* arg);

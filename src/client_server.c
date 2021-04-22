@@ -59,8 +59,9 @@ msg* recv_msg(int socket_fd){
     return NULL;
 }
 
-int enqueue_server_msg(int socket_fd){
-    msg* recv_server_msg;
+int enqueue_server_msg(int socket_fd, msg* recv_server_msg){
+    recv_server_msg = NULL;
+
     int tbr, recv_str_len;
     char header[HEADER_SIZE]; header[HEADER_SIZE - 1] = '\0';
 
@@ -77,12 +78,8 @@ int enqueue_server_msg(int socket_fd){
     }
     else if(ret == 0){
         return 1;
-    }
-    else if((recv_server_msg = recv_msg(socket_fd)) != NULL){
-        switch(recv_server_msg->msg_type){
-            case CHAT: handle_chat_msg(*recv_server_msg); break;
-        }
-        // will later handle different types of msgs
+    }else{
+        recv_server_msg = recv_msg(socket_fd);
     }
 
     return ret;
