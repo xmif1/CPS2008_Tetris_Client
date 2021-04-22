@@ -29,11 +29,10 @@ int client_connect(char ip[INET_ADDRSTRLEN], int port){
 msg* recv_msg(int socket_fd){
     msg* recv_msg = malloc(sizeof(msg));
     int ret, tbr, recv_str_len; // tbr = total bytes read
-    char header[HEADER_SIZE];
+    char header[HEADER_SIZE]; header[HEADER_SIZE - 1] = '\0';
 
-    if((ret = recv(socket_fd, (void*) &header, HEADER_SIZE, 0)) > 0){
-        int recv_header_failed = 0;
-        for(tbr = ret; tbr < HEADER_SIZE; tbr += ret){
+    if((ret = recv(socket_fd, (void*) &header, HEADER_SIZE - 1, 0)) > 0){
+        for(tbr = ret; tbr < HEADER_SIZE - 1; tbr += ret){
             if((ret = recv(socket_fd, (void*) (&header + tbr), HEADER_SIZE - tbr, 0)) < 0){
                 return NULL;
             }
