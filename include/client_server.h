@@ -20,7 +20,28 @@
 #define HEADER_SIZE (MSG_LEN_DIGITS + 6) // '<msg_len>::<msg_type>::\0' where msg_len is of size MSG_LEN_DIGITS chars and msg_type is 1 char
 #define MSG_BUFFER_SIZE 20
 
+// GAME SESSION CONFIGS
+#define N_SESSION_PLAYERS 8
+
 // STRUCTS
+typedef struct{
+    char ip[INET_ADDRSTRLEN];
+    int port;
+    int client_fd;
+    int server_fd;
+    int state;
+}ingame_client;
+
+typedef struct{
+    ingame_client* players[N_SESSION_PLAYERS];
+    int p2p_fd;
+    int game_type;
+    int n_players;
+    int n_baselines;
+    int n_winlines;
+    int time;
+}game_session;
+
 typedef struct{
     int msg_type;
     char* msg;
@@ -28,10 +49,14 @@ typedef struct{
 
 // FUNC DEFNS
 int client_init();
-int send_msg(msg send_msg, int socket_fd);
-int enqueue_msg(int socket_fd);
+int client_connect();
+int send_msg(msg sendMsg, int socket_fd);
+int enqueue_server_msg(int socket_fd);
 msg dequeue_chat_msg();
-void handle_chat_msg(msg recv_msg);
+void* accept_peer_connections(void* arg);
+void* service_peer_connections(void* arg);
+void handle_chat_msg(msg recvMsg);
+void handle_new_game_msg(msg recvMsg);
 void mrerror(char* err_msg);
 void smrerror(char* err_msg);
 void red();
@@ -40,8 +65,15 @@ void reset();
 
 // GLOBALS
 msg recv_chat_msgs[MSG_BUFFER_SIZE];
-pthread_mutex_t threadMutex = PTHREAD_MUTEX_INITIALIZER;
 int n_chat_msgs = 0;
-enum MsgType {CHAT = 0, SCORE_UPDATE = 1, FINISHED_GAME = 2};
+pthread_mutex_t threadMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t clientMutexes[N_SESSION_PLAYERS];
+
+int server_fd;
+game_session gameSession;
+
+enum MsgType {CHAT = 0, SCORE_UPDATE = 1, NEW_GAME = 2, FINISHED_GAME = 3, P2P_READY = 4, CLIENTS_CONNECTED = 5};
+enum GameType {RISING_TIDE = 0, FAST_TRACK = 1, BOOMER = 2};
+enum State {WAITING = 0, CONNECTED = 1, FINISHED = 2, DISCONNECTED = 3};
 
 #endif //CPS2008_TETRIS_CLIENT_CLIENT_H
