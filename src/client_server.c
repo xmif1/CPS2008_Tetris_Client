@@ -62,7 +62,7 @@ msg* recv_msg(int socket_fd){
 int enqueue_server_msg(int socket_fd){
     msg* recv_server_msg;
     int tbr, recv_str_len;
-    char header[HEADER_SIZE];
+    char header[HEADER_SIZE]; header[HEADER_SIZE - 1] = '\0';
 
     fd_set set; FD_ZERO(&set); FD_SET(socket_fd, &set);
 
@@ -106,7 +106,7 @@ msg dequeue_chat_msg(){
 
 int send_msg(msg sendMsg, int socket_fd){
     int msg_len = strlen(sendMsg.msg) + 1;
-    int str_to_send_len = HEADER_SIZE + msg_len;
+    int str_to_send_len = HEADER_SIZE + msg_len - 1;
     char header[HEADER_SIZE];
     char* str_to_send = malloc(str_to_send_len);
 
