@@ -57,6 +57,7 @@ msg recv_msg(int socket_fd);
 msg dequeue_chat_msg();
 void* accept_peer_connections(void* arg);
 void* service_peer_connections(void* arg);
+void* score_update(void* arg);
 void handle_chat_msg(msg recvMsg);
 void handle_new_game_msg(msg recvMsg);
 void end_game();
