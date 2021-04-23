@@ -282,6 +282,9 @@ void* accept_peer_connections(void* arg){
 
     int select_ret = 0;
     while(1){
+        pthread_mutex_lock(&gameMutex);
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+
         FD_ZERO(&recv_fds);
         FD_SET(gameSession.p2p_fd, &recv_fds);
         nfds = gameSession.p2p_fd;
@@ -342,6 +345,9 @@ void* accept_peer_connections(void* arg){
         }else if(n_connected_players == n_expected_players){
             continue;
         }
+
+        pthread_mutex_unlock(&gameMutex);
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     }
 }
 
