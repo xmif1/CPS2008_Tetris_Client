@@ -2,8 +2,13 @@
 
 // wrapper around client connect, used to connect with server
 int client_init(){
-    server_fd = client_connect(IP_LOCALHOST, PORT);
+    // initialise mutexes
+    for(int i = 0; i < N_SESSION_PLAYERS; i++){
+        pthread_mutex_init(&clientMutexes[i], NULL);
+    }
 
+    // connect to game server
+    server_fd = client_connect(IP_LOCALHOST, PORT);
     return server_fd;
 }
 
@@ -168,6 +173,8 @@ void handle_new_game_msg(msg recvMsg){
     token = strtok(NULL, "::");
     int port = PORT + strtol(token, NULL, 10);
 
+    gameSession.score = 0;
+
     gameSession.n_players = 0;
     token = strtok(NULL, "::");
     while(token != NULL){
@@ -215,7 +222,48 @@ void handle_new_game_msg(msg recvMsg){
     strcpy(sendMsg.msg, "");
 
     send_msg(sendMsg, server_fd);
+
+    pthread_mutex_init(&gameMutex, NULL);
 }
+
+void end_game(){
+    msg finished_msg;
+    finished_msg.msg_type = FINISHED_GAME;
+    finished_msg.msg = malloc(1);
+    strcpy(finished_msg.msg, "");
+
+    pthread_mutex_lock(&gameMutex);
+    for(int i = 0; i < gameSession.n_players; i++){
+        if(gameSession.players[i]->state != DISCONNECTED || gameSession.players[i]->state != FINISHED){
+            send_msg(finished_msg, gameSession.players[i]->server_fd);
+            close(gameSession.players[i]->server_fd);
+            close(gameSession.players[i]->client_fd);
+        }
+
+        free(gameSession.players[i]);
+    }
+
+    close(gameSession.p2p_fd);
+    gameSession.p2p_fd = 0;
+
+    // send final score update to server
+    msg score_msg;
+    score_msg.msg_type = SCORE_UPDATE;
+    score_msg.msg = malloc(7);
+    if(score_msg.msg == NULL){
+        mrerror("Failed to allocate memory for score update to server");
+    }
+    sprintf(score_msg.msg, "%d", gameSession.score);
+
+    send_msg(score_msg, server_fd);
+
+    // signal to server that player is finished
+    send_msg(finished_msg, server_fd);
+
+    pthread_mutex_unlock(&gameMutex);
+}
+
+// ------ THREADED FRONT-END FUNCTIONS ------
 
 // notice that data accessed by this function running in its own thread is independent from the data accessed by the
 // join_peer_connections function running in its own thread; in this manner, these functions are thread safe
@@ -360,6 +408,29 @@ void* service_peer_connections(void* arg){
                 }
             }
         }
+    }
+}
+
+void* score_update(void* arg){
+    while(1){
+        sleep(1);
+
+        pthread_mutex_lock(&gameMutex);
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+
+        msg score_msg;
+        score_msg.msg_type = SCORE_UPDATE;
+
+        score_msg.msg = malloc(7);
+        if(score_msg.msg == NULL){
+            mrerror("Failed to allocate memory for score update to server");
+        }
+        sprintf(score_msg.msg, "%d", gameSession.score);
+
+        send_msg(score_msg, server_fd);
+
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+        pthread_mutex_unlock(&gameMutex);
     }
 }
 

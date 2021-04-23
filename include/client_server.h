@@ -35,6 +35,7 @@ typedef struct{
 typedef struct{
     ingame_client* players[N_SESSION_PLAYERS];
     int p2p_fd;
+    int score;
     int game_type;
     int n_players;
     int n_baselines;
@@ -58,6 +59,7 @@ void* accept_peer_connections(void* arg);
 void* service_peer_connections(void* arg);
 void handle_chat_msg(msg recvMsg);
 void handle_new_game_msg(msg recvMsg);
+void end_game();
 void mrerror(char* err_msg);
 void smrerror(char* err_msg);
 void red();
@@ -68,6 +70,7 @@ void reset();
 msg recv_chat_msgs[MSG_BUFFER_SIZE];
 int n_chat_msgs = 0;
 pthread_mutex_t threadMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t gameMutex;
 pthread_mutex_t clientMutexes[N_SESSION_PLAYERS];
 
 int server_fd;
