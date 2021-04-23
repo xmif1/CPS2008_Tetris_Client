@@ -220,7 +220,6 @@ void handle_new_game_msg(msg recvMsg){
 // notice that data accessed by this function running in its own thread is independent from the data accessed by the
 // join_peer_connections function running in its own thread; in this manner, these functions are thread safe
 void* accept_peer_connections(void* arg){
-    printf("%d\n", gameSession.n_players); // debug
     struct sockaddr_in clientaddrIn;
     socklen_t sizeof_clientaddrIn = sizeof(struct sockaddr_in);
     fd_set recv_fds;
@@ -277,7 +276,7 @@ void* accept_peer_connections(void* arg){
                 strcpy(sendMsg.msg, "");
 
                 for(int i = 0; i < gameSession.n_players; i++){
-                    if(send_msg(sendMsg, gameSession.players[i]->server_fd) < 0){
+                    if(send_msg(sendMsg, gameSession.players[i]->client_fd) < 0){
                         pthread_mutex_lock(clientMutexes + i);
                         gameSession.players[i]->state = DISCONNECTED;
                         close(gameSession.players[i]->client_fd); gameSession.players[i]->client_fd = 0;
@@ -297,7 +296,7 @@ void* accept_peer_connections(void* arg){
 void* service_peer_connections(void* arg){
     for(int i = 0; i < gameSession.n_players; i++){
         int client_server_fd = client_connect(gameSession.players[i]->ip, gameSession.players[i]->port);
-        if(server_fd < 0){
+        if(client_server_fd < 0){
             pthread_mutex_lock(clientMutexes + i);
             gameSession.players[i]->state = DISCONNECTED;
             close(gameSession.players[i]->client_fd); gameSession.players[i]->client_fd = 0;
