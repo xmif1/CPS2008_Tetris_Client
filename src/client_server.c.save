@@ -325,13 +325,15 @@ void* accept_peer_connections(void* arg){
             continue;
         }
         else if(FD_ISSET(gameSession.p2p_fd, &recv_fds) && n_connected_players < n_expected_players){
+            printf("accept\n"); //debug
             int client_fd = accept(gameSession.p2p_fd, (struct sockaddr*) &clientaddrIn, &sizeof_clientaddrIn);
 
             char ip[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &clientaddrIn.sin_addr, ip, INET_ADDRSTRLEN);
 
             for(int i = 0; i < gameSession.n_players; i++){
-                if(strcmp(gameSession.players[i]->ip, ip) == 0 && gameSession.players[i]->client_fd == 0){
+                if(strcmp(gameSession.players[i]->ip, ip) == 0){
+                    printf("match ip, fd = %d\n", client_fd); //debug
                     pthread_mutex_lock(clientMutexes + i);
                     gameSession.players[i]->state = CONNECTED;
                     gameSession.players[i]->client_fd = client_fd;
@@ -349,7 +351,9 @@ void* accept_peer_connections(void* arg){
                 strcpy(sendMsg.msg, "");
 
                 for(int i = 0; i < gameSession.n_players; i++){
+		    printf("this fd: %d, port: %d, fd: %d\n", gameSession.p2p_fd, gameSession.players[i]->port, gameSession.players[i]->client_fd); //debug
                     if(send_msg(sendMsg, gameSession.players[i]->client_fd) < 0){
+			smrerror("fail"); //debug
                         pthread_mutex_lock(clientMutexes + i);
                         gameSession.players[i]->state = DISCONNECTED;
                         close(gameSession.players[i]->client_fd); gameSession.players[i]->client_fd = 0;
@@ -377,6 +381,7 @@ void* service_peer_connections(void* arg){
     for(int i = 0; i < gameSession.n_players; i++){
         int client_server_fd = client_connect(gameSession.players[i]->ip, gameSession.players[i]->port);
         if(client_server_fd < 0){
+            printf("disconnected...\n"); //debug
             pthread_mutex_lock(clientMutexes + i);
             gameSession.players[i]->state = DISCONNECTED;
             close(gameSession.players[i]->client_fd); gameSession.players[i]->client_fd = 0;
@@ -385,9 +390,8 @@ void* service_peer_connections(void* arg){
         }
         else{
             n_expected_acks++;
-            pthread_mutex_lock(clientMutexes + i);
+            
             gameSession.players[i]->server_fd = client_server_fd;
-            pthread_mutex_unlock(clientMutexes + i);
         }
     }
 
@@ -421,6 +425,7 @@ void* service_peer_connections(void* arg){
                     msg recv_server_msg = recv_msg(gameSession.players[i]->server_fd);
 
                     if(recv_server_msg.msg_type == CLIENTS_CONNECTED){
+			printf("ack %d\n", gameSession.players[i]->port); //debug
                         n_ack_recv++;
                     }else{
                         n_expected_acks--;
@@ -435,6 +440,8 @@ void* service_peer_connections(void* arg){
             }
         }
     }
+
+    printf("n_expected_acks: %d, n_recv_acks: %d\n", n_expected_acks, n_ack_recv); //debug
 }
 
 void* score_update(void* arg){
