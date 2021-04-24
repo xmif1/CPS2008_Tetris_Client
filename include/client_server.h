@@ -36,6 +36,7 @@ typedef struct{
     ingame_client* players[N_SESSION_PLAYERS];
     int p2p_fd;
     int score;
+    int game_in_progress;
     int game_type;
     int n_players;
     int n_baselines;
