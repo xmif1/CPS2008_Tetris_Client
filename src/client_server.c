@@ -322,6 +322,7 @@ void* accept_peer_connections(void* arg){
             mrerror("Error occured on select between client connections");
         }
         else if(select_ret == 0){
+            pthread_mutex_unlock(&gameMutex);
             continue;
         }
         else if(FD_ISSET(gameSession.p2p_fd, &recv_fds) && n_connected_players < n_expected_players){
