@@ -37,6 +37,7 @@ typedef struct{
     int p2p_fd;
     int score;
     int game_in_progress;
+    int n_lines_to_add;
     int game_type;
     int n_players;
     int n_baselines;
@@ -50,23 +51,24 @@ typedef struct{
 }msg;
 
 // FUNC DEFNS
+int end_game();
+int get_score();
 int client_init();
 int client_connect();
 int send_msg(msg sendMsg, int socket_fd);
-msg enqueue_server_msg(int socket_fd);
-msg recv_msg(int socket_fd);
 msg dequeue_chat_msg();
+msg recv_msg(int socket_fd);
+msg enqueue_server_msg(int socket_fd);
 void* accept_peer_connections(void* arg);
 void* service_peer_connections(void* arg);
-void* score_update(void* arg);
+void signalGameTermination();
 void handle_chat_msg(msg recvMsg);
 void handle_new_game_msg(msg recvMsg);
-void end_game();
+void red();
+void reset();
+void yellow();
 void mrerror(char* err_msg);
 void smrerror(char* err_msg);
-void red();
-void yellow();
-void reset();
 
 // GLOBALS
 msg recv_chat_msgs[MSG_BUFFER_SIZE];
@@ -79,7 +81,7 @@ int server_fd;
 game_session gameSession;
 
 enum MsgType {INVALID = -2, EMPTY = -1, CHAT = 0, SCORE_UPDATE = 1, NEW_GAME = 2, FINISHED_GAME = 3, P2P_READY = 4,
-              CLIENTS_CONNECTED = 5, START_GAME = 6};
+              CLIENTS_CONNECTED = 5, START_GAME = 6, LINES_CLEARED = 7};
 enum GameType {RISING_TIDE = 0, FAST_TRACK = 1, BOOMER = 2};
 enum State {WAITING = 0, CONNECTED = 1, FINISHED = 2, DISCONNECTED = 3};
 

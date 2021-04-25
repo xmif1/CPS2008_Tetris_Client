@@ -175,6 +175,7 @@ void handle_new_game_msg(msg recvMsg){
 
     gameSession.score = 0;
     gameSession.game_in_progress = 1;
+    gameSession.n_lines_to_add = 0;
 
     gameSession.n_players = 0;
     token = strtok(NULL, "::");
@@ -222,7 +223,7 @@ void handle_new_game_msg(msg recvMsg){
     send_msg(sendMsg, server_fd);
 }
 
-void end_game(){
+int end_game(){
     msg finished_msg;
     finished_msg.msg_type = FINISHED_GAME;
     finished_msg.msg = malloc(1);
@@ -242,7 +243,7 @@ void end_game(){
     close(gameSession.p2p_fd);
     gameSession.p2p_fd = 0;
 
-    // send final score update to server
+    // get final score
     msg score_msg;
     score_msg.msg_type = SCORE_UPDATE;
     score_msg.msg = malloc(7);
@@ -251,13 +252,34 @@ void end_game(){
     }
     sprintf(score_msg.msg, "%d", gameSession.score);
 
+    gameSession.game_in_progress = 0;
+    pthread_mutex_unlock(&gameMutex);
+
+    // send final score update to server
     send_msg(score_msg, server_fd);
 
     // signal to server that player is finished
-    send_msg(finished_msg, server_fd);
+    return send_msg(finished_msg, server_fd);
+}
 
-    gameSession.game_in_progress = 0;
+int get_score(){
+    pthread_mutex_lock(&gameMutex);
 
+    int score = -1;
+    if(gameSession.game_in_progress){
+        score = gameSession.score;
+    }
+
+    pthread_mutex_unlock(&gameMutex);
+
+    return score;
+}
+
+void signalGameTermination(){
+    pthread_mutex_lock(&gameMutex);
+    if(gameSession.game_in_progress){
+        gameSession.game_in_progress = 0;
+    }
     pthread_mutex_unlock(&gameMutex);
 }
 
@@ -289,6 +311,7 @@ void* accept_peer_connections(void* arg){
             pthread_mutex_unlock(&gameMutex);
             break;
         }
+        pthread_mutex_unlock(&gameMutex);
 
         FD_ZERO(&recv_fds);
         FD_SET(gameSession.p2p_fd, &recv_fds);
@@ -322,7 +345,6 @@ void* accept_peer_connections(void* arg){
             mrerror("Error occured on select between client connections");
         }
         else if(select_ret == 0){
-            pthread_mutex_unlock(&gameMutex);
             continue;
         }
         else if(FD_ISSET(gameSession.p2p_fd, &recv_fds) && n_connected_players < n_expected_players){
@@ -360,11 +382,33 @@ void* accept_peer_connections(void* arg){
                 }
             }
         }else if(n_connected_players == n_expected_players){
-            pthread_mutex_unlock(&gameMutex);
-            continue;
+            for(int i = 0; i < gameSession.n_players; i++){
+                pthread_mutex_lock(clientMutexes + i);
+                if(FD_ISSET(gameSession.players[i]->client_fd, &recv_fds)){
+                    msg recv_client_msg = recv_msg(gameSession.players[i]->client_fd);
+
+                    if(recv_client_msg.msg_type == INVALID){
+                        gameSession.players[i]->state = DISCONNECTED;
+                        close(gameSession.players[i]->client_fd); gameSession.players[i]->client_fd = 0;
+                        close(gameSession.players[i]->server_fd); gameSession.players[i]->server_fd = 0;
+                    }else{
+                        switch(recv_client_msg.msg_type){
+                            case FINISHED_GAME: gameSession.players[i]->state = FINISHED;
+                                                close(gameSession.players[i]->client_fd); gameSession.players[i]->client_fd = 0;
+                                                close(gameSession.players[i]->server_fd); gameSession.players[i]->server_fd = 0;
+                                                break;
+                            case LINES_CLEARED: pthread_mutex_lock(&gameMutex);
+                                                gameSession.n_lines_to_add += strtol(recv_client_msg.msg, NULL, 10);
+                                                pthread_mutex_unlock(&gameMutex);
+                                                break;
+
+                        }
+                    }
+                }
+                pthread_mutex_unlock(clientMutexes + i);
+            }
         }
 
-        pthread_mutex_unlock(&gameMutex);
         pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     }
 
@@ -418,6 +462,7 @@ void* service_peer_connections(void* arg){
             mrerror("Error occured on select between server connections");
         }else{
             for(int i = 0; i < gameSession.n_players; i++){
+                pthread_mutex_lock(clientMutexes + i);
                 if(FD_ISSET(gameSession.players[i]->server_fd, &recv_fds)){
                     msg recv_server_msg = recv_msg(gameSession.players[i]->server_fd);
 
@@ -426,48 +471,15 @@ void* service_peer_connections(void* arg){
                     }else{
                         n_expected_acks--;
 
-                        pthread_mutex_lock(clientMutexes + i);
                         gameSession.players[i]->state = DISCONNECTED;
                         close(gameSession.players[i]->client_fd); gameSession.players[i]->client_fd = 0;
                         close(gameSession.players[i]->server_fd); gameSession.players[i]->server_fd = 0;
-                        pthread_mutex_unlock(clientMutexes + i);
                     }
                 }
+                pthread_mutex_unlock(clientMutexes + i);
             }
         }
     }
-}
-
-void* score_update(void* arg){
-    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
-    while(1){
-        sleep(1);
-
-        pthread_mutex_lock(&gameMutex);
-        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-
-        if(!gameSession.game_in_progress){
-            pthread_mutex_unlock(&gameMutex);
-            break;
-        }
-
-        msg score_msg;
-        score_msg.msg_type = SCORE_UPDATE;
-
-        score_msg.msg = malloc(7);
-        if(score_msg.msg == NULL){
-            mrerror("Failed to allocate memory for score update to server");
-        }
-        sprintf(score_msg.msg, "%d", gameSession.score);
-
-        send_msg(score_msg, server_fd);
-
-        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-        pthread_mutex_unlock(&gameMutex);
-    }
-
-    pthread_exit(NULL);
 }
 
 /* ----------- ERROR HANDLING ----------- */
