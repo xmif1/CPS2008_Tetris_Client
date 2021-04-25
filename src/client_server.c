@@ -275,12 +275,17 @@ int get_score(){
     return score;
 }
 
-void signalGameTermination(){
+int signalGameTermination(){
+   int ret = 0;
+
     pthread_mutex_lock(&gameMutex);
     if(gameSession.game_in_progress){
+	ret = 1;
         gameSession.game_in_progress = 0;
     }
     pthread_mutex_unlock(&gameMutex);
+
+    return ret;
 }
 
 // ------ THREADED FRONT-END FUNCTIONS ------
