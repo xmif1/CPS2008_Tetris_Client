@@ -23,6 +23,11 @@ int client_connect(char ip[INET_ADDRSTRLEN], int port){
         return -1;
     }
 
+    // allow port reuse...
+    if(setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0){
+	return -1;
+    }
+
     // Then connect it...
     if(connect(socket_fd, (struct sockaddr*) &serveraddrIn, sizeof(serveraddrIn)) < 0){
         return -1;
@@ -45,11 +50,9 @@ msg recv_msg(int socket_fd){
             }
         }
 
-        char* token = strtok(header, "::");
-        recv_str_len = strtol(token, NULL, 10);
-
-        token = strtok(NULL, "::");
-        recv_msg.msg_type = strtol(token, NULL, 10);
+	char str_len_part[5]; strncpy(str_len_part, header, 4); str_len_part[4] = '\0';
+        recv_str_len = strtol(str_len_part, NULL, 10);
+        recv_msg.msg_type = header[6] - '0';
 
         recv_msg.msg = malloc(recv_str_len);
 
@@ -216,7 +219,7 @@ void handle_new_game_msg(msg recvMsg){
     msg sendMsg;
     sendMsg.msg_type = P2P_READY;
     sendMsg.msg = malloc(1);
-    strcpy(sendMsg.msg, "");
+    strcpy(sendMsg.msg, "\0");
 
     send_msg(sendMsg, server_fd);
 }
@@ -225,7 +228,7 @@ int end_game(){
     msg finished_msg;
     finished_msg.msg_type = FINISHED_GAME;
     finished_msg.msg = malloc(1);
-    strcpy(finished_msg.msg, "");
+    strcpy(finished_msg.msg, "\0");
 
     pthread_mutex_lock(&gameMutex);
     for(int i = 0; i < gameSession.n_players; i++){
@@ -344,10 +347,7 @@ void* accept_peer_connections(void* arg){
 
         select_ret = select(nfds + 1, &recv_fds, NULL, NULL, &timeout);
 
-        if(select_ret < 0){
-            mrerror("Error occured on select between client connections");
-        }
-        else if(select_ret == 0){
+        if(select_ret <= 0){
             continue;
         }
         else if(FD_ISSET(gameSession.p2p_fd, &recv_fds) && n_connected_players < n_expected_players){
@@ -365,23 +365,6 @@ void* accept_peer_connections(void* arg){
 
                     n_connected_players++;
                     break;
-                }
-            }
-
-            if(n_expected_players == n_connected_players){
-                msg sendMsg;
-                sendMsg.msg_type = CLIENTS_CONNECTED;
-                sendMsg.msg = malloc(1);
-                strcpy(sendMsg.msg, "");
-
-                for(int i = 0; i < gameSession.n_players; i++){
-                    if(send_msg(sendMsg, gameSession.players[i]->client_fd) < 0){
-                        pthread_mutex_lock(clientMutexes + i);
-                        gameSession.players[i]->state = DISCONNECTED;
-                        if(gameSession.players[i]->client_fd > 0){ close(gameSession.players[i]->client_fd);} gameSession.players[i]->client_fd = 0;
-                        if(gameSession.players[i]->server_fd > 0){ close(gameSession.players[i]->server_fd);} gameSession.players[i]->server_fd = 0;
-                        pthread_mutex_unlock(clientMutexes + i);
-                    }
                 }
             }
         }else if(n_connected_players == n_expected_players){
@@ -421,7 +404,6 @@ void* accept_peer_connections(void* arg){
 // notice that data accessed by this function running in its own thread is independent from the data accessed by the
 // accept_peer_connections function running in its own thread; in this manner, these functions are thread safe
 void* service_peer_connections(void* arg){
-    int n_expected_acks = 0;
     for(int i = 0; i < gameSession.n_players; i++){
         int client_server_fd = client_connect(gameSession.players[i]->ip, gameSession.players[i]->port);
         if(client_server_fd < 0){
@@ -432,55 +414,9 @@ void* service_peer_connections(void* arg){
             pthread_mutex_unlock(clientMutexes + i);
         }
         else{
-            n_expected_acks++;
             pthread_mutex_lock(clientMutexes + i);
             gameSession.players[i]->server_fd = client_server_fd;
             pthread_mutex_unlock(clientMutexes + i);
-        }
-    }
-
-    fd_set recv_fds;
-    int n_ack_recv, select_ret, nfds;
-    n_ack_recv = 0;
-
-    while(n_ack_recv < n_expected_acks){
-        FD_ZERO(&recv_fds);
-        select_ret = nfds = 0;
-
-        for(int i = 0; i < gameSession.n_players; i++){
-            pthread_mutex_lock(clientMutexes + i);
-            if(gameSession.players[i]->state != DISCONNECTED || gameSession.players[i]->state != FINISHED){
-                if(gameSession.players[i]->server_fd > 0){
-                    FD_SET(gameSession.players[i]->server_fd, &recv_fds);
-                }
-
-                if(nfds < gameSession.players[i]->server_fd){
-                    nfds = gameSession.players[i]->server_fd;
-                }
-            }
-            pthread_mutex_unlock(clientMutexes + i);
-        }
-
-        if(select(nfds + 1, &recv_fds, NULL, NULL, NULL) < 0){
-            mrerror("Error occured on select between server connections");
-        }else{
-            for(int i = 0; i < gameSession.n_players; i++){
-                pthread_mutex_lock(clientMutexes + i);
-                if(FD_ISSET(gameSession.players[i]->server_fd, &recv_fds)){
-                    msg recv_server_msg = recv_msg(gameSession.players[i]->server_fd);
-
-                    if(recv_server_msg.msg_type == CLIENTS_CONNECTED){
-                        n_ack_recv++;
-                    }else{
-                        n_expected_acks--;
-
-                        gameSession.players[i]->state = DISCONNECTED;
-	                if(gameSession.players[i]->client_fd > 0){ close(gameSession.players[i]->client_fd);} gameSession.players[i]->client_fd = 0;
-        	        if(gameSession.players[i]->server_fd > 0){ close(gameSession.players[i]->server_fd);} gameSession.players[i]->server_fd = 0;
-                    }
-                }
-                pthread_mutex_unlock(clientMutexes + i);
-            }
         }
     }
 }
