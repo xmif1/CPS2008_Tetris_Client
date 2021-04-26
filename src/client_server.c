@@ -231,8 +231,8 @@ int end_game(){
     for(int i = 0; i < gameSession.n_players; i++){
         if(gameSession.players[i]->state != DISCONNECTED || gameSession.players[i]->state != FINISHED){
             send_msg(finished_msg, gameSession.players[i]->server_fd);
-            close(gameSession.players[i]->server_fd);
-            close(gameSession.players[i]->client_fd);
+            if(gameSession.players[i]->server_fd > 0){ close(gameSession.players[i]->server_fd);}
+            if(gameSession.players[i]->client_fd > 0){ close(gameSession.players[i]->client_fd);}
         }
 
         free(gameSession.players[i]);
@@ -378,8 +378,8 @@ void* accept_peer_connections(void* arg){
                     if(send_msg(sendMsg, gameSession.players[i]->client_fd) < 0){
                         pthread_mutex_lock(clientMutexes + i);
                         gameSession.players[i]->state = DISCONNECTED;
-                        close(gameSession.players[i]->client_fd); gameSession.players[i]->client_fd = 0;
-                        close(gameSession.players[i]->server_fd); gameSession.players[i]->server_fd = 0;
+                        if(gameSession.players[i]->client_fd > 0){ close(gameSession.players[i]->client_fd);} gameSession.players[i]->client_fd = 0;
+                        if(gameSession.players[i]->server_fd > 0){ close(gameSession.players[i]->server_fd);} gameSession.players[i]->server_fd = 0;
                         pthread_mutex_unlock(clientMutexes + i);
                     }
                 }
@@ -392,13 +392,13 @@ void* accept_peer_connections(void* arg){
 
                     if(recv_client_msg.msg_type == INVALID){
                         gameSession.players[i]->state = DISCONNECTED;
-                        close(gameSession.players[i]->client_fd); gameSession.players[i]->client_fd = 0;
-                        close(gameSession.players[i]->server_fd); gameSession.players[i]->server_fd = 0;
+                        if(gameSession.players[i]->client_fd > 0){ close(gameSession.players[i]->client_fd);} gameSession.players[i]->client_fd = 0;
+                        if(gameSession.players[i]->server_fd > 0){ close(gameSession.players[i]->server_fd);} gameSession.players[i]->server_fd = 0;
                     }else{
                         switch(recv_client_msg.msg_type){
                             case FINISHED_GAME: gameSession.players[i]->state = FINISHED;
-                                                close(gameSession.players[i]->client_fd); gameSession.players[i]->client_fd = 0;
-                                                close(gameSession.players[i]->server_fd); gameSession.players[i]->server_fd = 0;
+			                        if(gameSession.players[i]->client_fd > 0){ close(gameSession.players[i]->client_fd);} gameSession.players[i]->client_fd = 0;
+                       				if(gameSession.players[i]->server_fd > 0){ close(gameSession.players[i]->server_fd);} gameSession.players[i]->server_fd = 0;
                                                 break;
                             case LINES_CLEARED: pthread_mutex_lock(&gameMutex);
                                                 gameSession.n_lines_to_add += strtol(recv_client_msg.msg, NULL, 10);
@@ -427,8 +427,8 @@ void* service_peer_connections(void* arg){
         if(client_server_fd < 0){
             pthread_mutex_lock(clientMutexes + i);
             gameSession.players[i]->state = DISCONNECTED;
-            close(gameSession.players[i]->client_fd); gameSession.players[i]->client_fd = 0;
-            close(gameSession.players[i]->server_fd); gameSession.players[i]->server_fd = 0;
+            if(gameSession.players[i]->client_fd > 0){ close(gameSession.players[i]->client_fd);} gameSession.players[i]->client_fd = 0;
+            if(gameSession.players[i]->server_fd > 0){ close(gameSession.players[i]->server_fd);} gameSession.players[i]->server_fd = 0;
             pthread_mutex_unlock(clientMutexes + i);
         }
         else{
@@ -475,8 +475,8 @@ void* service_peer_connections(void* arg){
                         n_expected_acks--;
 
                         gameSession.players[i]->state = DISCONNECTED;
-                        close(gameSession.players[i]->client_fd); gameSession.players[i]->client_fd = 0;
-                        close(gameSession.players[i]->server_fd); gameSession.players[i]->server_fd = 0;
+	                if(gameSession.players[i]->client_fd > 0){ close(gameSession.players[i]->client_fd);} gameSession.players[i]->client_fd = 0;
+        	        if(gameSession.players[i]->server_fd > 0){ close(gameSession.players[i]->server_fd);} gameSession.players[i]->server_fd = 0;
                     }
                 }
                 pthread_mutex_unlock(clientMutexes + i);
