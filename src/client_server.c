@@ -83,7 +83,21 @@ msg enqueue_server_msg(int socket_fd){
         msg empty_msg; empty_msg.msg_type = EMPTY;
         return empty_msg;
     }else{
-        return recv_msg(socket_fd);
+        msg recvMsg = recv_msg(socket_fd);
+
+        while(1){
+            // if msg buffer is full, TCP flow control kicks in...
+            if(n_server_msgs < (MSG_BUFFER_SIZE - 1)){
+                pthread_mutex_lock(&threadMutex);
+                recv_server_msgs[n_server_msgs] = recvMsg;
+                n_server_msgs++;
+                pthread_mutex_unlock(&threadMutex);
+
+		break;
+            }
+        }
+
+        return recvMsg;
     }
 }
 
