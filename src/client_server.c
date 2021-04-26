@@ -87,17 +87,15 @@ msg enqueue_server_msg(int socket_fd){
     }
 }
 
-msg dequeue_chat_msg(){
-    msg recv_msg;
-    while(1){
-        if(n_chat_msgs > 0){
-            pthread_mutex_lock(&threadMutex);
-            recv_msg = recv_chat_msgs[n_chat_msgs - 1];
-            n_chat_msgs--;
-            pthread_mutex_unlock(&threadMutex);
+msg dequeue_server_msg(){
+    msg recv_msg; recv_msg.msg_type = EMPTY;
 
-            break;
-        }
+    if(n_server_msgs > 0){
+        pthread_mutex_lock(&threadMutex);
+        recv_msg = recv_server_msgs[n_server_msgs - 1];
+        n_server_msgs--;
+        pthread_mutex_unlock(&threadMutex);
+
     }
 
     return recv_msg;
@@ -142,20 +140,6 @@ int send_msg(msg sendMsg, int socket_fd){
 }
 
 /* ----------- UTIL FUNCTIONS ----------- */
-
-void handle_chat_msg(msg recvMsg){
-    while(1){
-        // if msg buffer is full, further buffering is handled by TCPs flow control
-        if(n_chat_msgs < (MSG_BUFFER_SIZE - 1)){
-            pthread_mutex_lock(&threadMutex);
-            recv_chat_msgs[n_chat_msgs] = recvMsg;
-            n_chat_msgs++;
-            pthread_mutex_unlock(&threadMutex);
-
-            break;
-        }
-    }
-}
 
 void handle_new_game_msg(msg recvMsg){
     char* token = strtok(recvMsg.msg, "::");

@@ -18,7 +18,7 @@
 #define TYPE SOCK_STREAM
 #define MSG_LEN_DIGITS 4
 #define HEADER_SIZE (MSG_LEN_DIGITS + 6) // '<msg_len>::<msg_type>::\0' where msg_len is of size MSG_LEN_DIGITS chars and msg_type is 1 char
-#define MSG_BUFFER_SIZE 20
+#define MSG_BUFFER_SIZE 40
 
 // GAME SESSION CONFIGS
 #define N_SESSION_PLAYERS 8
@@ -57,12 +57,11 @@ int client_init();
 int client_connect();
 int signalGameTermination();
 int send_msg(msg sendMsg, int socket_fd);
-msg dequeue_chat_msg();
+msg dequeue_server_msg();
 msg recv_msg(int socket_fd);
 msg enqueue_server_msg(int socket_fd);
 void* accept_peer_connections(void* arg);
 void* service_peer_connections(void* arg);
-void handle_chat_msg(msg recvMsg);
 void handle_new_game_msg(msg recvMsg);
 void red();
 void reset();
@@ -71,8 +70,8 @@ void mrerror(char* err_msg);
 void smrerror(char* err_msg);
 
 // GLOBALS
-msg recv_chat_msgs[MSG_BUFFER_SIZE];
-int n_chat_msgs = 0;
+msg recv_server_msgs[MSG_BUFFER_SIZE];
+int n_server_msgs = 0;
 pthread_mutex_t threadMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t gameMutex;
 pthread_mutex_t clientMutexes[N_SESSION_PLAYERS];
