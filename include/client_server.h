@@ -53,6 +53,7 @@ typedef struct{
 // FUNC DEFNS
 int end_game();
 int get_score();
+int get_lines_to_add();
 int client_init();
 int client_connect();
 int signalGameTermination();
@@ -62,6 +63,8 @@ msg recv_msg(int socket_fd);
 msg enqueue_server_msg(int socket_fd);
 void* accept_peer_connections(void* arg);
 void* service_peer_connections(void* arg);
+void set_score(int score);
+void send_cleared_lines(int n_cleared_lines);
 void handle_new_game_msg(msg recvMsg);
 void red();
 void reset();

@@ -263,6 +263,21 @@ int end_game(){
     return send_msg(finished_msg, server_fd);
 }
 
+void send_cleared_lines(int n_cleared_lines){
+    msg lines_msg;
+    lines_msg.msg_type = LINES_CLEARED;
+    lines_msg.msg = malloc(4);
+    sprintf(lines_msg.msg, "%d", n_cleared_lines);
+
+    pthread_mutex_lock(&gameMutex);
+    for(int i = 0; i < gameSession.n_players; i++){
+        if(gameSession.players[i]->state != DISCONNECTED || gameSession.players[i]->state != FINISHED){
+            send_msg(lines_msg, gameSession.players[i]->server_fd);
+        }
+    }
+    pthread_mutex_unlock(&gameMutex);
+}
+
 int get_score(){
     pthread_mutex_lock(&gameMutex);
 
@@ -274,6 +289,29 @@ int get_score(){
     pthread_mutex_unlock(&gameMutex);
 
     return score;
+}
+
+void set_score(int score){
+    pthread_mutex_lock(&gameMutex);
+
+    if(gameSession.game_in_progress){
+        gameSession.score = score;
+    }
+
+    pthread_mutex_unlock(&gameMutex);
+}
+
+int get_lines_to_add(){
+    pthread_mutex_lock(&gameMutex);
+
+    int n_lines = -1;
+    if(gameSession.game_in_progress){
+        n_lines = gameSession.n_lines_to_add;
+    }
+
+    pthread_mutex_unlock(&gameMutex);
+
+    return n_lines;
 }
 
 int signalGameTermination(){
