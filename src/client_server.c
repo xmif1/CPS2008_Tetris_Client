@@ -307,6 +307,7 @@ int get_lines_to_add(){
     int n_lines = -1;
     if(gameSession.game_in_progress){
         n_lines = gameSession.n_lines_to_add;
+	gameSession.n_lines_to_add = 0;
     }
 
     pthread_mutex_unlock(&gameMutex);
