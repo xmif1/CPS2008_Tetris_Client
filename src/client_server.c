@@ -96,7 +96,7 @@ msg enqueue_server_msg(int socket_fd){
                 n_server_msgs++;
                 pthread_mutex_unlock(&threadMutex);
 
-		break;
+		        break;
             }
         }
 
@@ -172,11 +172,16 @@ void handle_new_game_msg(msg recvMsg){
     gameSession.time = strtol(token, NULL, 10);
 
     token = strtok(NULL, "::");
+    gameSession.seed = strtol(token, NULL, 10);
+
+    token = strtok(NULL, "::");
     int port = PORT + strtol(token, NULL, 10);
 
     gameSession.score = 0;
     gameSession.game_in_progress = 1;
     gameSession.n_lines_to_add = 0;
+    gameSession.total_lines_cleared = 0;
+    time(&gameSession.start_time);
 
     gameSession.n_players = 0;
     token = strtok(NULL, "::");
@@ -196,32 +201,34 @@ void handle_new_game_msg(msg recvMsg){
         token = strtok(NULL, "::");
     }
 
-    // Create socket
-    int p2p_fd = socket(SDOMAIN, TYPE, 0);
-    if(p2p_fd < 0){
-        mrerror("Peer-to-peer socket initialisation failed");
+    if(gameSession.game_type != CHILL){
+        // Create socket
+        int p2p_fd = socket(SDOMAIN, TYPE, 0);
+        if(p2p_fd < 0){
+            mrerror("Peer-to-peer socket initialisation failed");
+        }
+
+        struct sockaddr_in sockaddrIn = {.sin_family = SDOMAIN, .sin_addr.s_addr = INADDR_ANY, .sin_port = htons(port)};
+
+        // Then (in darkness) bind it...
+        if(bind(p2p_fd, (struct sockaddr*) &sockaddrIn, sizeof(sockaddrIn)) < 0){
+            mrerror("Peer-to-peer socket binding failed");
+        }
+
+        // Finally, listen.
+        if(listen(p2p_fd, 5) < 0){
+            mrerror("Listening on peer-to-peer socket failed");
+        }
+
+        gameSession.p2p_fd = p2p_fd;
+
+        msg sendMsg;
+        sendMsg.msg_type = P2P_READY;
+        sendMsg.msg = malloc(1);
+        strcpy(sendMsg.msg, "\0");
+
+        send_msg(sendMsg, server_fd);
     }
-
-    struct sockaddr_in sockaddrIn = {.sin_family = SDOMAIN, .sin_addr.s_addr = INADDR_ANY, .sin_port = htons(port)};
-
-    // Then (in darkness) bind it...
-    if(bind(p2p_fd, (struct sockaddr*) &sockaddrIn, sizeof(sockaddrIn)) < 0){
-        mrerror("Peer-to-peer socket binding failed");
-    }
-
-    // Finally, listen.
-    if(listen(p2p_fd, 5) < 0){
-        mrerror("Listening on peer-to-peer socket failed");
-    }
-
-    gameSession.p2p_fd = p2p_fd;
-
-    msg sendMsg;
-    sendMsg.msg_type = P2P_READY;
-    sendMsg.msg = malloc(1);
-    strcpy(sendMsg.msg, "\0");
-
-    send_msg(sendMsg, server_fd);
 }
 
 int end_game(){
@@ -241,7 +248,9 @@ int end_game(){
         free(gameSession.players[i]);
     }
 
-    close(gameSession.p2p_fd);
+    if(gameSession.game_type != CHILL){
+        close(gameSession.p2p_fd);
+    }
     gameSession.p2p_fd = 0;
 
     // get final score

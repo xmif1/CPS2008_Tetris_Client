@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <time.h>
 
 #ifndef CPS2008_TETRIS_CLIENT_CLIENT_H
 #define CPS2008_TETRIS_CLIENT_CLIENT_H
@@ -34,15 +35,18 @@ typedef struct{
 
 typedef struct{
     ingame_client* players[N_SESSION_PLAYERS];
+    time_t start_time;
     int p2p_fd;
     int score;
     int game_in_progress;
     int n_lines_to_add;
+    int total_lines_cleared;
     int game_type;
     int n_players;
     int n_baselines;
     int n_winlines;
     int time;
+    int seed;
 }game_session;
 
 typedef struct{
@@ -84,7 +88,7 @@ game_session gameSession;
 
 enum MsgType {INVALID = -2, EMPTY = -1, CHAT = 0, SCORE_UPDATE = 1, NEW_GAME = 2, FINISHED_GAME = 3, P2P_READY = 4,
               CLIENTS_CONNECTED = 5, START_GAME = 6, LINES_CLEARED = 7};
-enum GameType {RISING_TIDE = 0, FAST_TRACK = 1, BOOMER = 2};
+enum GameType {RISING_TIDE = 0, FAST_TRACK = 1, BOOMER = 2, CHILL = 3};
 enum State {WAITING = 0, CONNECTED = 1, FINISHED = 2, DISCONNECTED = 3};
 
 #endif //CPS2008_TETRIS_CLIENT_CLIENT_H
