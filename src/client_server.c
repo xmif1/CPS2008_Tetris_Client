@@ -1,18 +1,29 @@
 #include "../include/client_server.h"
 
-// wrapper around client connect, used to connect with server
+/* Initialiser for a new client instance, in particular responsible for:
+ * (i) connecting to the game server by calling the client_server library function
+ * (ii) initialising the mutexes for the P2P clients array
+ *
+ * If client_connect fails to open and connect a socket, -1 is returned. This return is propogated by client_init and
+ * its the resonsibility of the caller to handle this accordingly.
+ */
 int client_init(){
-    // initialise mutexes
+    // initialise mutexes for P2P clients
     for(int i = 0; i < N_SESSION_PLAYERS; i++){
         pthread_mutex_init(&clientMutexes[i], NULL);
     }
 
-    // connect to game server
-    server_fd = client_connect(IP_LOCALHOST, PORT);
-    return server_fd;
+    // connect to the game server and set global file descriptor reference to returned fd by client_connect
+    server_fd = client_connect(IP_LOCALHOST, PORT); // returns -1 on failure
+    return server_fd; // propogate the return of client_connect...
 }
 
-// return >= 0 on success, return being the socket created for client; else return -1 on failure.
+/* Library function for connecting a client at a specified IPv4 address and port, initialising a socket and attempt to
+ * connect. We also attempt to set socket reuse at the specified port, to mitigate the port allocation issue outlined in
+ * the report.
+ *
+ * The function returns >= 0 (the socket file descriptor) on success, -1 on failure.
+ */
 int client_connect(char ip[INET_ADDRSTRLEN], int port){
     int socket_fd;
     struct sockaddr_in serveraddrIn = {.sin_family = SDOMAIN, .sin_addr.s_addr = inet_addr(ip), .sin_port = htons(port)};
@@ -20,44 +31,66 @@ int client_connect(char ip[INET_ADDRSTRLEN], int port){
     // Create socket
     socket_fd = socket(SDOMAIN, TYPE, 0);
     if(socket_fd < 0){
-        return -1;
+        return -1; // return -1 on failure
     }
 
-    // allow port reuse...
+    // (attempt to) allow port reuse...
     if(setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0){
-	return -1;
+	    return -1; // return -1 on failure
     }
 
     // Then connect it...
     if(connect(socket_fd, (struct sockaddr*) &serveraddrIn, sizeof(serveraddrIn)) < 0){
-        return -1;
+        return -1; // return -1 on failure
     }
 
-    return socket_fd;
+    return socket_fd; // otherwise if socket initialised and connected, return...
 }
 
+/* Library function for fetching an encoded message from the specified socket. The message is decoded accordingly and
+ * represented as a msg struct. The encoding format and decoding procedure is outlined accordingly in the project report.
+ *
+ * Returns the msg instance to the caller. In case of a failure during message receipt, the msg instance is still returned
+ * but the msg type is set to INVALID.
+ */
 msg recv_msg(int socket_fd){
     msg recv_msg;
     recv_msg.msg_type = INVALID;
 
+    // variables used to maintain total bytes read (tbr), number of bytes received from last call to recv, and the
+    // expected length of the next data part
     int ret, tbr, recv_str_len; // tbr = total bytes read
+
+    // initialise char array to keep header of message
     char header[HEADER_SIZE]; header[HEADER_SIZE - 1] = '\0';
 
+    // initial call to recv attempts to fetch the header of the message first
     if((ret = recv(socket_fd, (void*) &header, HEADER_SIZE - 1, 0)) > 0){
+        // ensure that the header is recieved entirely (keep on looping until tbr == HEADER_SIZE - 1)
         for(tbr = ret; tbr < HEADER_SIZE - 1; tbr += ret){
             if((ret = recv(socket_fd, (void*) (&header + tbr), HEADER_SIZE - tbr, 0)) < 0){
+                // if erroneous i.e. we have not managed to fetch a complete message header, set type as INVALID to
+                // signal to calling function
                 recv_msg.msg_type = INVALID;
             }
         }
 
-	char str_len_part[5]; strncpy(str_len_part, header, 4); str_len_part[4] = '\0';
+        // decode the header by extracting the expected length of the data part and the message type
+	    char str_len_part[5]; strncpy(str_len_part, header, 4); str_len_part[4] = '\0';
         recv_str_len = strtol(str_len_part, NULL, 10);
         recv_msg.msg_type = header[6] - '0';
 
+        // initialise array of decoded data part length, in which data part will be stored
         recv_msg.msg = malloc(recv_str_len);
+        if(recv_msg.msg == NULL){
+            mrerror("Error while allocating memory");
+        }
 
+        // reset tbr to 0, loop until the successive calls to recv yield the entire data part
         for(tbr = 0; tbr < recv_str_len; tbr += ret){
             if((ret = recv(socket_fd, (void*) recv_msg.msg + tbr, recv_str_len - tbr, 0)) < 0){
+                // if erroneous i.e. we have not managed to fetch a complete data part, set type as INVALID to signal to
+                // calling function
                 recv_msg.msg_type = INVALID;
             }
         }
@@ -65,36 +98,43 @@ msg recv_msg(int socket_fd){
 
     return recv_msg;
 }
-
+/* Library function for fetching a message from the specified socket, by first selecting on the socket with a timeout.
+ * If a socket has data to stream, this is fetched using a call to recv_msg outlined earlier, and enqueing the message
+ * in recv_server_msgs buffer. In essence then, enqueue_server_msg is a time-out variant of recv_msg.
+ */
 msg enqueue_server_msg(int socket_fd){
-    int tbr, recv_str_len;
-    char header[HEADER_SIZE]; header[HEADER_SIZE - 1] = '\0';
-
+    // Define file descriptor set on which to carry out select; in essence contains socket_fd only
     fd_set set; FD_ZERO(&set); FD_SET(socket_fd, &set);
 
+    // Define time out for select, set for 5 seconds
     struct timeval timeout;
     timeout.tv_sec = 5;
     timeout.tv_usec = 0;
 
-    int ret = select(socket_fd + 1, &set, NULL, NULL, &timeout);
+    int ret = select(socket_fd + 1, &set, NULL, NULL, &timeout); // select on file descriptor set with time out
 
+    // if ret < 0, then server has disconnected and we return a msg of type INVALID to signal disconnection to the caller
     if(ret < 0){
         msg err_msg; err_msg.msg_type = INVALID;
         return err_msg;
     }
-    else if(ret == 0){
+    else if(ret == 0){ // else if ret = 0, then no data is available from the server after the timeout
+        // we then send a msg to type EMPTY to the caller, to signal that server is still connected but no data is available
         msg empty_msg; empty_msg.msg_type = EMPTY;
         return empty_msg;
     }else{
+        // else data is available and we fetch it via a call to recv_msg
         msg recvMsg = recv_msg(socket_fd);
 
-        while(1){
-            // if msg buffer is full, TCP flow control kicks in...
+        while(1){ // wait until we can enqueue the msgs
+            // note that if msg buffer is full, TCP flow control kicks in, since it is a streaming protocol...
             if(n_server_msgs < (MSG_BUFFER_SIZE - 1)){
-                pthread_mutex_lock(&threadMutex);
-                recv_server_msgs[n_server_msgs] = recvMsg;
-                n_server_msgs++;
-                pthread_mutex_unlock(&threadMutex);
+                // since the message buffer is also accessed to retrieve messages, possibly by a different thread, we
+                // must ensure that it is accessed in a thread--safe manner.
+                pthread_mutex_lock(&threadMutex); // obtain mutex lock for thread of execution
+                recv_server_msgs[n_server_msgs] = recvMsg; // enqueue in order
+                n_server_msgs++; // update queue size
+                pthread_mutex_unlock(&threadMutex); // release mutex lock for thread of execution
 
 		        break;
             }
@@ -104,54 +144,67 @@ msg enqueue_server_msg(int socket_fd){
     }
 }
 
+/* Library function for returning a msg instance from the recv_server_msgs buffer, in the order received, and in a
+ * thread-safe manner. If queue is empty, a msg of type EMPTY is returned.
+ */
 msg dequeue_server_msg(){
     msg recv_msg; recv_msg.msg_type = EMPTY;
 
-    if(n_server_msgs > 0){
-        pthread_mutex_lock(&threadMutex);
-        recv_msg = recv_server_msgs[n_server_msgs - 1];
-        n_server_msgs--;
-        pthread_mutex_unlock(&threadMutex);
+    if(n_server_msgs > 0){ //
+        pthread_mutex_lock(&threadMutex); // obtain mutex lock for thread of execution
+        recv_msg = recv_server_msgs[n_server_msgs - 1]; // dequeue in order
+        n_server_msgs--; // update queue size
+        pthread_mutex_unlock(&threadMutex); // release mutex lock for thread of execution
 
     }
 
     return recv_msg;
 }
 
+/* Library function used to send a message at the specified socket, taking care of encoding the message (as described in
+ * detail in the project report), ensuring that the entire message is sent, and carrying out suitable error checks and
+ * handling. Returns the number of sent bytes to the caller; if the return is negative, then an error has occured on
+ * send, and should typically follow by disconnection.
+ */
 int send_msg(msg sendMsg, int socket_fd){
+    // initialise necessary variables for encoding the message
     int msg_len = strlen(sendMsg.msg) + 1;
-    int str_to_send_len = HEADER_SIZE + msg_len - 1;
+    int str_to_send_len = HEADER_SIZE + msg_len - 1; // enough space for the header + data part + null character
     char header[HEADER_SIZE];
     char* str_to_send = malloc(str_to_send_len);
 
+    // if allocation of memory for holding the message to send failed, report an error and exit
     if(str_to_send == NULL){
         mrerror("Failed to allocate memory for message send");
     }
 
+    // the header must always be of fixed size, with the data part length having MSG_LEN_DIGITS; if the required number
+    // of digits is less than MSG_LEN_DIGITS, we prepend the required number of 0s to the header
     int i = 0;
     for(; i < MSG_LEN_DIGITS - ((int) floor(log10(msg_len)) + 1); i++){
         header[i] = '0';
     }
 
-    sprintf(header + i, "%d", msg_len);
-    strcat(header, "::");
-    sprintf(header + MSG_LEN_DIGITS + 2, "%d", sendMsg.msg_type);
-    strcat(header, "::");
+    sprintf(header + i, "%d", msg_len); // concat the data part length
+    strcat(header, "::"); // concat the separation token
+    sprintf(header + MSG_LEN_DIGITS + 2, "%d", sendMsg.msg_type); // concat the message type
+    strcat(header, "::"); // concat the separation token
 
-    strcpy(str_to_send, header);
-    strcat(str_to_send, sendMsg.msg);
+    strcpy(str_to_send, header); // copy the header to the string holding the final message string to be sent
+    strcat(str_to_send, sendMsg.msg); // append the data part to this string
     str_to_send[str_to_send_len-1] = '\0'; // ensure null terminated
 
     int tbs; // tbs = total bytes sent
     int sent_bytes;
 
+    // make successive calls to send() until the entire message is sent or an error occurs
     for(tbs = 0; tbs < str_to_send_len; tbs += sent_bytes){
         if((sent_bytes = send(socket_fd, (void*) str_to_send + tbs, str_to_send_len - tbs, 0)) < 0){
-            break;
+            break; // in case of error, sent_bytes < 0 and hence a -ve value is returned indicating an error
         }
     }
 
-    free(str_to_send);
+    free(str_to_send); // free memory as necessary
 
     return sent_bytes;
 }
@@ -339,8 +392,6 @@ int signalGameTermination(){
 
 // ------ THREADED FRONT-END FUNCTIONS ------
 
-// notice that data accessed by this function running in its own thread is independent from the data accessed by the
-// join_peer_connections function running in its own thread; in this manner, these functions are thread safe
 void* accept_peer_connections(void* arg){
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -449,8 +500,6 @@ void* accept_peer_connections(void* arg){
     pthread_exit(NULL);
 }
 
-// notice that data accessed by this function running in its own thread is independent from the data accessed by the
-// accept_peer_connections function running in its own thread; in this manner, these functions are thread safe
 void* service_peer_connections(void* arg){
     for(int i = 0; i < gameSession.n_players; i++){
         int client_server_fd = client_connect(gameSession.players[i]->ip, gameSession.players[i]->port);
