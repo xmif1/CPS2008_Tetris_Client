@@ -211,7 +211,22 @@ int send_msg(msg sendMsg, int socket_fd){
 
 /* ----------- UTIL FUNCTIONS ----------- */
 
+/* Responsible for decoding the game options from the recieved NEW_GAME message. Note that it is assumed that the game
+ * options given have been validated already (in this case, by the server). A detailed outline of the format of the msg
+ * is given in the report, on the section about the service_game_request server function (which is responsible for sending
+ * the NEW_GAME message).
+ *
+ * From the message, the port_block_offset is decoded. The port_block_offset is an integer which is added to the default
+ * port 8080 so as to obtain a distinct port number for each client. We allocate this by enumerating the clients in the
+ * game session from 1 <= i <= n, and giving client i the port offset i, i.e. the resulting port number on which they
+ * will open a socket to accept P2P connects will be 8080 + i. The list of IPv4 addresses that follow specifies the
+ * clients to which to connect in the P2P network. The offset is also used to prevent a client from connecting to itself
+ * (the IPv4 address at position $i$ for the client with port_block_offset i is the IPv4 address of the client itself.
+ * This prevents any 'feedback loop' situations that bombard the client with requests.
+ */
 void handle_new_game_msg(msg recvMsg){
+    // Begin by decoding the game options from the message, converting from string to int and populating the gameSession
+    // struct with the passed game options...
     char* token = strtok(recvMsg.msg, "::");
     gameSession.game_type = strtol(token, NULL, 10);
 
@@ -227,25 +242,31 @@ void handle_new_game_msg(msg recvMsg){
     token = strtok(NULL, "::");
     gameSession.seed = strtol(token, NULL, 10);
 
+    // then extract the port block offset and find the port (PORT = 8080) on which to open a socket for P2P connections
     token = strtok(NULL, "::");
     int port = PORT + strtol(token, NULL, 10);
 
+    // populate the gameSession struct with default values...
     gameSession.score = 0;
-    gameSession.game_in_progress = 1;
+    gameSession.game_in_progress = 1; // flag that indicates that game is now in progress
     gameSession.n_lines_to_add = 0;
     gameSession.total_lines_cleared = 0;
     time(&gameSession.start_time);
 
-    gameSession.n_players = 0;
+    // initially 0 players are in the game; we increment this for every IPv4 address specified in the next part of the
+    // message, so long as the address is distinct from out own public IPv4 address...
+    gameSession.n_players = 0; // if this remains 0, the no P2P required (game mode must be CHILL)
     token = strtok(NULL, "::");
 
     int offset = 1;
     while(token != NULL){
+        // decode the IPv4 address etc and maintain information, except if it corrsponds to this client
+        // this is in order to prevent the feedback loop situation mentioned earlier
         if(port != (PORT + offset)){
-            gameSession.players[gameSession.n_players] = malloc(sizeof(ingame_client));
-            gameSession.players[gameSession.n_players]->state = WAITING;
-            gameSession.players[gameSession.n_players]->port = PORT + offset;
-            strcpy(gameSession.players[gameSession.n_players]->ip, token);
+            gameSession.players[gameSession.n_players] = malloc(sizeof(ingame_client)); // allocate new client struct
+            gameSession.players[gameSession.n_players]->state = WAITING; // initially not connected to this client in P2P
+            gameSession.players[gameSession.n_players]->port = PORT + offset; // find port on which other client is accepting P2P connections
+            strcpy(gameSession.players[gameSession.n_players]->ip, token); // copy IPv4 address
 
             gameSession.n_players++;
         }
@@ -254,13 +275,14 @@ void handle_new_game_msg(msg recvMsg){
         token = strtok(NULL, "::");
     }
 
-    if(gameSession.game_type != CHILL){
+    if(gameSession.game_type != CHILL){ // if game mode is not CHILL, setup P2P...
         // Create socket
         int p2p_fd = socket(SDOMAIN, TYPE, 0);
         if(p2p_fd < 0){
             mrerror("Peer-to-peer socket initialisation failed");
         }
 
+        // Attempt to allow port re-use to prevent the socket binding error outlines in the report...
         struct sockaddr_in sockaddrIn = {.sin_family = SDOMAIN, .sin_addr.s_addr = INADDR_ANY, .sin_port = htons(port)};
 
         // Then (in darkness) bind it...
@@ -275,6 +297,7 @@ void handle_new_game_msg(msg recvMsg){
 
         gameSession.p2p_fd = p2p_fd;
 
+        // lastly, send a P2P_READY message to the server to indicate that client is ready to accept P2P connections...
         msg sendMsg;
         sendMsg.msg_type = P2P_READY;
         sendMsg.msg = malloc(1);
@@ -284,39 +307,49 @@ void handle_new_game_msg(msg recvMsg){
     }
 }
 
+/* Clean-up function that in particular is responsible for disconnecting all P2P clients still connected, sending a final
+ * SCORE_UPDATE message to ensure that the server has recieved the final score at the time of completion, send a FINISHED_GAME
+ * message, and lastly free any memory as necessary.
+ */
 int end_game(){
+    // initialise new FINISHED_GAME message to send to server and connected P2P clients to flag successful completion
     msg finished_msg;
     finished_msg.msg_type = FINISHED_GAME;
     finished_msg.msg = malloc(1);
     strcpy(finished_msg.msg, "\0");
 
-    pthread_mutex_lock(&gameMutex);
+    // in a thread--safe manner we update the gameSession struct
+    pthread_mutex_lock(&gameMutex); // obtain mutex lock for gameSession
     for(int i = 0; i < gameSession.n_players; i++){
+        // if P2P client (player) is connected i.e. not disconnected or finished the game successfully
         if(gameSession.players[i]->state != DISCONNECTED || gameSession.players[i]->state != FINISHED){
-            send_msg(finished_msg, gameSession.players[i]->server_fd);
+            send_msg(finished_msg, gameSession.players[i]->server_fd); // send FINISHED_GAME over the P2P to the client
+
+            // then close any valid sockets associated with the client for bi-directional P2P communication
             if(gameSession.players[i]->server_fd > 0){ close(gameSession.players[i]->server_fd);}
             if(gameSession.players[i]->client_fd > 0){ close(gameSession.players[i]->client_fd);}
         }
 
-        free(gameSession.players[i]);
+        free(gameSession.players[i]); // free memory as necessary
     }
 
-    if(gameSession.game_type != CHILL){
+    if(gameSession.game_type != CHILL){ // if multiplayer, close socket on which we accepted P2P connections
         close(gameSession.p2p_fd);
     }
     gameSession.p2p_fd = 0;
 
-    // get final score
+    // initialise SCORE_UPDATE message
+    // note that we do not need to use the thread-safe score getter here as we already have the gameSession mutex
     msg score_msg;
     score_msg.msg_type = SCORE_UPDATE;
     score_msg.msg = malloc(7);
     if(score_msg.msg == NULL){
         mrerror("Failed to allocate memory for score update to server");
     }
-    sprintf(score_msg.msg, "%d", gameSession.score);
+    sprintf(score_msg.msg, "%d", gameSession.score); // and copy last score to the data part of the message
 
     gameSession.game_in_progress = 0;
-    pthread_mutex_unlock(&gameMutex);
+    pthread_mutex_unlock(&gameMutex); // release mutex lock for gameSession
 
     // send final score update to server
     send_msg(score_msg, server_fd);
@@ -325,67 +358,79 @@ int end_game(){
     return send_msg(finished_msg, server_fd);
 }
 
+// Sends a LINES_CLEARED message to all connected clients in the P2P network specifying the number of lines cleared in
+// the last move, in a thread--safe manner; the passed integer is assumed to be correct
 void send_cleared_lines(int n_cleared_lines){
+    // initialise new LINES_CLEARED message
     msg lines_msg;
     lines_msg.msg_type = LINES_CLEARED;
     lines_msg.msg = malloc(4);
-    sprintf(lines_msg.msg, "%d", n_cleared_lines);
+    sprintf(lines_msg.msg, "%d", n_cleared_lines); // copy passed int into message data part, convering int to string
 
-    pthread_mutex_lock(&gameMutex);
+    pthread_mutex_lock(&gameMutex); // obtain mutex lock for gameSession
     for(int i = 0; i < gameSession.n_players; i++){
+        // if P2P client (player) is connected i.e. not disconnected or finished the game successfully
         if(gameSession.players[i]->state != DISCONNECTED || gameSession.players[i]->state != FINISHED){
-            send_msg(lines_msg, gameSession.players[i]->server_fd);
+            send_msg(lines_msg, gameSession.players[i]->server_fd); // send to client
         }
     }
-    pthread_mutex_unlock(&gameMutex);
+    pthread_mutex_unlock(&gameMutex); // release mutex lock for gameSession
 }
 
+// Thread--safe getter for the score variable in the gameSession struct; returns >= 0 if in a game session, -1 otherwise
 int get_score(){
-    pthread_mutex_lock(&gameMutex);
+    pthread_mutex_lock(&gameMutex); // obtain mutex lock for gameSession
 
-    int score = -1;
-    if(gameSession.game_in_progress){
-        score = gameSession.score;
+    int score = -1; // returns -1 if not in a game session
+    if(gameSession.game_in_progress){ // if in a game session
+        score = gameSession.score; // set score the gameSession.score
     }
 
-    pthread_mutex_unlock(&gameMutex);
+    pthread_mutex_unlock(&gameMutex); // release mutex lock for gameSession
 
-    return score;
+    return score; // returns gameSession.score (>= 0) if in a game session
 }
 
+// Thread--safe setter for the score variable in the gameSession struct; score is assumed to be valid
 void set_score(int score){
-    pthread_mutex_lock(&gameMutex);
+    pthread_mutex_lock(&gameMutex); // obtain mutex lock for gameSession
 
-    if(gameSession.game_in_progress){
-        gameSession.score = score;
+    if(gameSession.game_in_progress){ // if in a game session
+        gameSession.score = score; // set gameSession.score to the passed score value
     }
 
-    pthread_mutex_unlock(&gameMutex);
+    pthread_mutex_unlock(&gameMutex); // release mutex lock for gameSession
 }
 
+/* Thread--safe getter for the n_lines_to_add variable in the gameSession struct; after a successful call, sets the
+ * variable to 0 (i.e. we are assuming that once the lines have been 'fetched', they have been added to the bottom of
+ * the playing board). Returns >= 0 if in a game session, -1 otherwise.
+ */
 int get_lines_to_add(){
-    pthread_mutex_lock(&gameMutex);
+    pthread_mutex_lock(&gameMutex); // obtain mutex lock for gameSession
 
-    int n_lines = -1;
-    if(gameSession.game_in_progress){
-        n_lines = gameSession.n_lines_to_add;
-	gameSession.n_lines_to_add = 0;
+    int n_lines = -1; // returns -1 if not in a game session
+    if(gameSession.game_in_progress){ // if in a game session
+        n_lines = gameSession.n_lines_to_add; // copy current value of n_lines_to_add
+	    gameSession.n_lines_to_add = 0; // then reset it to 0
     }
 
-    pthread_mutex_unlock(&gameMutex);
+    pthread_mutex_unlock(&gameMutex); // release mutex lock for gameSession
 
-    return n_lines;
+    return n_lines; // returns number of lines cleared received (>= 0) if in a game session
 }
 
+// In a thread--safe manner, if in a game session (game_in_progress = 1), we set game_in_progress to 0; return 1 on
+// success, 0 otherwise (if called when not in a game session)
 int signalGameTermination(){
-   int ret = 0;
+   int ret = 0; // returns 0 if not in a game session
 
-    pthread_mutex_lock(&gameMutex);
-    if(gameSession.game_in_progress){
-	ret = 1;
-        gameSession.game_in_progress = 0;
+    pthread_mutex_lock(&gameMutex); // obtain mutex lock for gameSession
+    if(gameSession.game_in_progress){ // if in a game session
+	    ret = 1; // returns 1 if was in a game session
+        gameSession.game_in_progress = 0; // set to 0 to flag that the game has ended
     }
-    pthread_mutex_unlock(&gameMutex);
+    pthread_mutex_unlock(&gameMutex); // release mutex lock for gameSession
 
     return ret;
 }
