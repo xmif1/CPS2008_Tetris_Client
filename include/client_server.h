@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <netdb.h>
 #include <math.h>
 #include <time.h>
 
@@ -58,8 +59,8 @@ typedef struct{
 int end_game();
 int get_score();
 int get_lines_to_add();
-int client_init();
-int client_connect();
+int client_init(char* ip);
+int client_connect(char ip[INET_ADDRSTRLEN], int port);
 int signalGameTermination();
 int send_msg(msg sendMsg, int socket_fd);
 msg dequeue_server_msg();

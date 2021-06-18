@@ -7,14 +7,22 @@
  * If client_connect fails to open and connect a socket, -1 is returned. This return is propogated by client_init and
  * its the resonsibility of the caller to handle this accordingly.
  */
-int client_init(){
+int client_init(char* ip){
+    // first being by validating the given ip address...
+    struct sockaddr_in temp_sa;
+    if(inet_pton(AF_INET, ip, &(temp_sa.sin_addr)) <= 0){
+        mrerror("Invalid IPv4 address. Exiting...");
+    }
+
+    char ip_str[INET_ADDRSTRLEN]; strcpy(ip_str, ip); // copy into a string
+
     // initialise mutexes for P2P clients
     for(int i = 0; i < N_SESSION_PLAYERS; i++){
         pthread_mutex_init(&clientMutexes[i], NULL);
     }
 
     // connect to the game server and set global file descriptor reference to returned fd by client_connect
-    server_fd = client_connect(IP_LOCALHOST, PORT); // returns -1 on failure
+    server_fd = client_connect(ip_str, PORT); // returns -1 on failure
     return server_fd; // propogate the return of client_connect...
 }
 
