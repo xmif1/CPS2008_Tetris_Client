@@ -445,128 +445,201 @@ int signalGameTermination(){
 
 // ------ THREADED FRONT-END FUNCTIONS ------
 
+/* Threaded function for accepting P2P connections during P2P setup, and then handling messages recieved by P2P clients
+ * during game play, by calling the appropriate handler functions. To do so, we select across the FDSET of client fds.
+ *
+ * We ignore received messages until the number of clients connected is equal to the number of *active* clients (since
+ * clients may disconnect during P2P setup).
+ */
 void* accept_peer_connections(void* arg){
-    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL); // maintaining atomic transactions; see report
 
+    // setting up for socket select
     struct sockaddr_in clientaddrIn;
     socklen_t sizeof_clientaddrIn = sizeof(struct sockaddr_in);
     fd_set recv_fds;
     int nfds;
 
     int n_connected_players, n_expected_players;
+    // initially the number of connected players is 0 and the number of active players (and hence expected to join) is
+    // equal to n_players i.e. the number of players which joined the game session
     n_connected_players = 0; n_expected_players = gameSession.n_players;
 
+    // initialise to 0
+    pthread_mutex_lock(&gameMutex);
     for(int i = 0; i < gameSession.n_players; i++){
         gameSession.players[i]->client_fd = 0;
     }
+    pthread_mutex_unlock(&gameMutex); // release mutex lock for gameSession struct
 
-    int select_ret = 0;
+    int select_ret = 0; // maintain return of select; initially set to 0, the default on timeout
     while(1){
-        pthread_mutex_lock(&gameMutex);
-        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+        pthread_mutex_lock(&gameMutex); // obtain mutex lock for gameSession struct
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL); // maintaining atomic transactions; see report
 
-        if(!gameSession.game_in_progress){
-            pthread_mutex_unlock(&gameMutex);
+        if(!gameSession.game_in_progress){ // if game not in progress i.e. has terminated, break
+            pthread_mutex_unlock(&gameMutex); // release mutex lock for gameSession struct
             break;
         }
-        pthread_mutex_unlock(&gameMutex);
+        pthread_mutex_unlock(&gameMutex); // release mutex lock for gameSession struct
 
-        FD_ZERO(&recv_fds);
-        FD_SET(gameSession.p2p_fd, &recv_fds);
-        nfds = gameSession.p2p_fd;
+        // set up FD_SET to select on;
+        FD_ZERO(&recv_fds); // first zero out
+        FD_SET(gameSession.p2p_fd, &recv_fds); // add the fd on which we accept p2p connections
+        nfds = gameSession.p2p_fd; // maintain highest fd in FD_SET recv_fds
 
+        // populate timeval struct for a 1 second timeout, to be used with the select call (i.e. non-blocking call)
         struct timeval timeout;
         timeout.tv_sec = 1;
         timeout.tv_usec = 0;
 
+        // begin iterating through the player instances in the game and if connected, add to FD_SET recv_fds
         for(int i = 0; i < gameSession.n_players; i++){
-            pthread_mutex_lock(clientMutexes + i);
+            pthread_mutex_lock(clientMutexes + i); // obtain mutex lock for client in gameSession struct
 
+            // if client is still connected and in the game session
             if(gameSession.players[i]->state != DISCONNECTED || gameSession.players[i]->state != FINISHED){
+                // and if the client has a valid client_fd
                 if(gameSession.players[i]->client_fd > 0){
-                    FD_SET(gameSession.players[i]->client_fd, &recv_fds);
+                    FD_SET(gameSession.players[i]->client_fd, &recv_fds); // then add to FD_SET recv_fds
                 }
 
-                if(nfds < gameSession.players[i]->client_fd){
+                // since nfds initially set to 0, then nfds >= 0 always
+                // i.e. gets updated only if gameSession.players[i]->client_fd > 0
+                // i.e. gets updated only if client_fd is valid, as above when adding to FD_SET recv_fds
+                if(nfds < gameSession.players[i]->client_fd){ // maintain highest fd in FD_SET recv_fds
                     nfds = gameSession.players[i]->client_fd;
                 }
-            }else{
-                n_expected_players--;
+            }else{ // else if no longer in game session (FINISHED or DISCONNECTED)
+                n_expected_players--; // the number of expected players is 1 less
             }
 
-            pthread_mutex_unlock(clientMutexes + i);
+            pthread_mutex_unlock(clientMutexes + i); // release mutex lock for client in gameSession struct
         }
 
-        select_ret = select(nfds + 1, &recv_fds, NULL, NULL, &timeout);
+        select_ret = select(nfds + 1, &recv_fds, NULL, NULL, &timeout); // select on the FD_SET recv_fds
 
+        // on timeout of select, simply continue, restarting the while loop, ready to wait again for some data to be recieved
         if(select_ret <= 0){
             continue;
         }
+        /* otherwise if the following are satisfied:
+         * (i)   select returned successfully i.e. there are 1 >= bytes to be recieved from one of the sockets in FD_SET recv_fds
+         * (ii)  p2p_fd is set in the FD_SET recv_fds
+         * (iii) n_connected_players < n_expected_players
+         * there there is some game session client ready to connect to this client's P2P server, forming one direction of
+         * the bi-directional connection.
+         */
         else if(FD_ISSET(gameSession.p2p_fd, &recv_fds) && n_connected_players < n_expected_players){
+            // accept the connection
             int client_fd = accept(gameSession.p2p_fd, (struct sockaddr*) &clientaddrIn, &sizeof_clientaddrIn);
 
+            // maintain the ip address of the client of the accepted connection
             char ip[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &clientaddrIn.sin_addr, ip, INET_ADDRSTRLEN);
 
+            // traverse the players array to find the game session client with the matching ip address and which have
+            // not already joined this client's P2P server
             for(int i = 0; i < gameSession.n_players; i++){
                 if(strcmp(gameSession.players[i]->ip, ip) == 0 && gameSession.players[i]->client_fd == 0){
-                    pthread_mutex_lock(clientMutexes + i);
-                    gameSession.players[i]->state = CONNECTED;
-                    gameSession.players[i]->client_fd = client_fd;
-                    pthread_mutex_unlock(clientMutexes + i);
+                    // if match found, then update with the connection settings
 
-                    n_connected_players++;
+                    pthread_mutex_lock(clientMutexes + i); // obtain mutex lock for client in gameSession struct
+                    gameSession.players[i]->state = CONNECTED; // flag as connected
+                    gameSession.players[i]->client_fd = client_fd; // and keep a reference to the fd returned by accept
+                    pthread_mutex_unlock(clientMutexes + i); // release mutex lock for client in gameSession struct
+
+                    n_connected_players++; // number of connected players (p2p clients) has increased by 1
                     break;
                 }
             }
+        // else if the number of connect players is equal to the number of expected players, we accept messages from the
+        // p2p clients (players) whose fd is set in the FD_SET recv_fds (there must be at least one since we enter this
+        // case only if select returns > 0 and no new connections are expected on p2p_fd).
         }else if(n_connected_players == n_expected_players){
             for(int i = 0; i < gameSession.n_players; i++){
-                pthread_mutex_lock(clientMutexes + i);
+                pthread_mutex_lock(clientMutexes + i); // obtain mutex lock for client in gameSession struct
                 if(FD_ISSET(gameSession.players[i]->client_fd, &recv_fds)){
                     msg recv_client_msg = recv_msg(gameSession.players[i]->client_fd);
 
                     if(recv_client_msg.msg_type == INVALID){
                         gameSession.players[i]->state = DISCONNECTED;
-                        if(gameSession.players[i]->client_fd > 0){ close(gameSession.players[i]->client_fd);} gameSession.players[i]->client_fd = 0;
-                        if(gameSession.players[i]->server_fd > 0){ close(gameSession.players[i]->server_fd);} gameSession.players[i]->server_fd = 0;
+                        if(gameSession.players[i]->client_fd > 0){
+                            close(gameSession.players[i]->client_fd);
+                        }
+                        gameSession.players[i]->client_fd = 0;
+
+                        if(gameSession.players[i]->server_fd > 0){
+                            close(gameSession.players[i]->server_fd);
+                        }
+                        gameSession.players[i]->server_fd = 0;
+
                     }else{
                         switch(recv_client_msg.msg_type){
                             case FINISHED_GAME: gameSession.players[i]->state = FINISHED;
-			                        if(gameSession.players[i]->client_fd > 0){ close(gameSession.players[i]->client_fd);} gameSession.players[i]->client_fd = 0;
-                       				if(gameSession.players[i]->server_fd > 0){ close(gameSession.players[i]->server_fd);} gameSession.players[i]->server_fd = 0;
-                                                break;
-                            case LINES_CLEARED: pthread_mutex_lock(&gameMutex);
+			                                    if(gameSession.players[i]->client_fd > 0){
+			                                        close(gameSession.players[i]->client_fd);
+			                                    }
+			                                    gameSession.players[i]->client_fd = 0;
+
+                       				            if(gameSession.players[i]->server_fd > 0){
+                       				                close(gameSession.players[i]->server_fd);
+                       				            }
+                       				            gameSession.players[i]->server_fd = 0;
+
+                       				            break;
+                            case LINES_CLEARED: pthread_mutex_lock(&gameMutex); // obtain mutex lock for gameSession struct
                                                 gameSession.n_lines_to_add += strtol(recv_client_msg.msg, NULL, 10);
-                                                pthread_mutex_unlock(&gameMutex);
+                                                pthread_mutex_unlock(&gameMutex); // release mutex lock for gameSession struct
                                                 break;
 
                         }
                     }
                 }
-                pthread_mutex_unlock(clientMutexes + i);
+                pthread_mutex_unlock(clientMutexes + i); // release mutex lock for client in gameSession struct
             }
         }
 
-        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL); // maintaining atomic transactions; see report
     }
 
     pthread_exit(NULL);
 }
 
+/* Threaded function for connecting with each client's P2P server, during P2P setup of a game session, forming one
+ * direction of the bi--directional fully connected mesh network. Observe that no handshake is carried out between the
+ * clients; as outlined in the limitations section, this may result in a one-direction connection instead of a bi-directional
+ * one, as one party may not successfully manage to connect with the other.
+ *
+ * Side note: Since this function, at the moment, only requires handling of connecting with clients during P2P setup,
+ * it is relatively 'short lived'. For this reason, the front--end implementation does not execute this function in its
+ * own thread. Rather, it is executed in the main thread. However, if a more robust handshaking mechanism as discussed
+ * in the final chapter of the report is to be implemented, then this function would almost definitely have to run in its
+ * own thread. The design then is such that we keep this future extension in mind.
+ *
+ * Updating to the gameSession struct is carried out in a thread--safe manner (even if executing in the main thread --
+ * there might be other spawned threads!)
+ */
 void* service_peer_connections(void* arg){
+    // for each client in the game session
     for(int i = 0; i < gameSession.n_players; i++){
+        // call client_connect with the specified IP and port as determined from the NEW_GAME message recieved prior
         int client_server_fd = client_connect(gameSession.players[i]->ip, gameSession.players[i]->port);
-        if(client_server_fd < 0){
-            pthread_mutex_lock(clientMutexes + i);
-            gameSession.players[i]->state = DISCONNECTED;
+
+        if(client_server_fd < 0){ // if client_connect was succesful (>= 0 implies a valid fild descriptor returned)
+            pthread_mutex_lock(clientMutexes + i); // obtain mutex for the client in the game session struct
+            gameSession.players[i]->state = DISCONNECTED; // flag as disconnected (so we do not attempt further communication)
+
+            // and close any valid file descriptors
             if(gameSession.players[i]->client_fd > 0){ close(gameSession.players[i]->client_fd);} gameSession.players[i]->client_fd = 0;
             if(gameSession.players[i]->server_fd > 0){ close(gameSession.players[i]->server_fd);} gameSession.players[i]->server_fd = 0;
-            pthread_mutex_unlock(clientMutexes + i);
+
+            pthread_mutex_unlock(clientMutexes + i); // release mutex for the client in the game session struct
         }
         else{
-            pthread_mutex_lock(clientMutexes + i);
-            gameSession.players[i]->server_fd = client_server_fd;
-            pthread_mutex_unlock(clientMutexes + i);
+            pthread_mutex_lock(clientMutexes + i); // obtain mutex for the client in the game session struct
+            gameSession.players[i]->server_fd = client_server_fd; // set reference to server_fd to the returned fd by client_connect
+            pthread_mutex_unlock(clientMutexes + i); // release mutex for the client in the game session struct
         }
     }
 }
