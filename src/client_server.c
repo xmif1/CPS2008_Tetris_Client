@@ -560,35 +560,40 @@ void* accept_peer_connections(void* arg){
             for(int i = 0; i < gameSession.n_players; i++){
                 pthread_mutex_lock(clientMutexes + i); // obtain mutex lock for client in gameSession struct
                 if(FD_ISSET(gameSession.players[i]->client_fd, &recv_fds)){
+                    // fetch message using the recv_msg function
                     msg recv_client_msg = recv_msg(gameSession.players[i]->client_fd);
 
-                    if(recv_client_msg.msg_type == INVALID){
-                        gameSession.players[i]->state = DISCONNECTED;
-                        if(gameSession.players[i]->client_fd > 0){
-                            close(gameSession.players[i]->client_fd);
+                    if(recv_client_msg.msg_type == INVALID){ // if fetched successfully (i.e. sender did not disconnect)
+                        gameSession.players[i]->state = DISCONNECTED; // flag sender as disconnected
+                        if(gameSession.players[i]->client_fd > 0){ // if valid client_fd
+                            close(gameSession.players[i]->client_fd); // then close
                         }
-                        gameSession.players[i]->client_fd = 0;
+                        gameSession.players[i]->client_fd = 0; // and set to 0
 
-                        if(gameSession.players[i]->server_fd > 0){
-                            close(gameSession.players[i]->server_fd);
+                        if(gameSession.players[i]->server_fd > 0){ // if valid server_fd
+                            close(gameSession.players[i]->server_fd); // then close
                         }
-                        gameSession.players[i]->server_fd = 0;
+                        gameSession.players[i]->server_fd = 0; // and set to 0
 
-                    }else{
+                    }else{ // otherwise is message received successfully, check type and handle accordingly
                         switch(recv_client_msg.msg_type){
-                            case FINISHED_GAME: gameSession.players[i]->state = FINISHED;
-			                                    if(gameSession.players[i]->client_fd > 0){
-			                                        close(gameSession.players[i]->client_fd);
+                            // if FINISHED_GAME message, then flag sender as finished and close connection
+                            case FINISHED_GAME: gameSession.players[i]->state = FINISHED; // flag as finished
+			                                    if(gameSession.players[i]->client_fd > 0){ // if valid client_fd
+			                                        close(gameSession.players[i]->client_fd); // then close
 			                                    }
-			                                    gameSession.players[i]->client_fd = 0;
+			                                    gameSession.players[i]->client_fd = 0; // and set to 0
 
-                       				            if(gameSession.players[i]->server_fd > 0){
-                       				                close(gameSession.players[i]->server_fd);
+                       				            if(gameSession.players[i]->server_fd > 0){ // if valid server_fd
+                       				                close(gameSession.players[i]->server_fd); // then close
                        				            }
-                       				            gameSession.players[i]->server_fd = 0;
+                       				            gameSession.players[i]->server_fd = 0; // and set to 0
 
                        				            break;
+                       		// else if LINES_CLEARED message, add number of lines cleared by sender to n_lines_to_add in
+                       		// a thread-safe manner
                             case LINES_CLEARED: pthread_mutex_lock(&gameMutex); // obtain mutex lock for gameSession struct
+                                                // decode number of lines cleared by sender and add to count
                                                 gameSession.n_lines_to_add += strtol(recv_client_msg.msg, NULL, 10);
                                                 pthread_mutex_unlock(&gameMutex); // release mutex lock for gameSession struct
                                                 break;
