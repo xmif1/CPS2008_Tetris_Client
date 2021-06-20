@@ -18,12 +18,17 @@ the appropriately defined mutexes, allows for the easy implementation of a threa
 front-end. To this extent, the API exposes a number of thread-safe functions, as well as thread-safe getters
 and setters for global defined shared variables.
 
+One major design decision made is to delegate thread-management to the front-end implementation, i.e. in particular we do
+not at any point spawn, cancel etc threads in any of the shared library functions. The idea is to make debugging easier.
+The rationale behind this, as well as to other thread-management considerations made, is outlined in the introductory
+chapter of the assignment report.
+
 ## Requirements
 
 This program is intended to run on Linux platforms, in particular on Debian-based systems such as Ubuntu and
 Lubuntu, on which we have tested the implementation with relative success.
 
-For installation, ```cmake``` version 3.17+ is required
+For installation, ```cmake``` version 3.17+ is required.
 
 ## Installation Instructions
 
